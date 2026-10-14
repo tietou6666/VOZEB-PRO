@@ -8,7 +8,10 @@ const mocks = vi.hoisted(() => ({
     transitionTask: vi.fn(),
     schedule: vi.fn(),
     refund: vi.fn(),
+    resolveImages: vi.fn(),
 }));
+
+vi.mock("./agent-text-input", () => ({ resolveTextMessageImages: mocks.resolveImages }));
 
 vi.mock("@/lib/auth/store", () => ({ refundUserPoints: mocks.refund }));
 vi.mock("@/lib/server/proxy-dispatcher", () => ({ configureServerProxyDispatcher: vi.fn() }));
@@ -30,6 +33,7 @@ describe("text task runtime recovery", () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        mocks.resolveImages.mockImplementation(async (messages) => messages);
         state = textTask(customConfig("channel-one", "https://one.example"));
         mocks.getTask.mockImplementation(async () => state);
         mocks.updateTask.mockImplementation(async (_id: string, patch: Partial<TextTask>) => {
@@ -46,6 +50,55 @@ describe("text task runtime recovery", () => {
     afterEach(() => {
         vi.unstubAllGlobals();
         vi.unstubAllEnvs();
+    });
+
+    it("hydrates managed images only for submission and keeps stored inputs as URLs", async () => {
+        state = textTask(openAiConfig("channel-one", "https://one.example"));
+        const source = "/api/reference-assets/permanent/source.png";
+        const image = "data:image/png;base64,aW1hZ2U=";
+        state.messages = [
+            {
+                role: "user",
+                content: [
+                    { type: "text", text: "反推提示词" },
+                    { type: "image_url", image_url: { url: source } },
+                ],
+            },
+        ];
+        const storedMessages = state.messages;
+        mocks.resolveImages.mockResolvedValue([
+            {
+                role: "user",
+                content: [
+                    { type: "text", text: "反推提示词" },
+                    { type: "image_url", image_url: { url: image } },
+                ],
+            },
+        ]);
+        const fetchMock = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { content: "画面描述" } }] }));
+        vi.stubGlobal("fetch", fetchMock);
+        await expect(runTextTaskStep(state, "http://internal", "")).resolves.toEqual({ state: "completed" });
+        expect(JSON.parse(String(fetchMock.mock.calls[0][1].body)).messages[0].content).toContainEqual({ type: "image_url", image_url: { url: image } });
+        expect(storedMessages[0].content).toContainEqual({ type: "image_url", image_url: { url: source } });
+        expect(JSON.stringify(mocks.updateTask.mock.calls)).not.toContain(image);
+    });
+
+    it("fails unreadable images before creating or charging any upstream request", async () => {
+        mocks.resolveImages.mockRejectedValueOnce(new Error("参考图片不存在、已过期或无权读取"));
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+        await expect(runTextTaskStep(state, "http://internal", "")).resolves.toMatchObject({ state: "failed", error: "参考图片不存在、已过期或无权读取" });
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(state.status).toBe("error");
+    });
+
+    it("queries an existing upstream task without re-reading its reference image", async () => {
+        state.upstream = { id: "existing", createPath: "/jobs" };
+        const fetchMock = vi.fn().mockResolvedValue(Response.json({ status: "processing" }));
+        vi.stubGlobal("fetch", fetchMock);
+        await expect(runTextTaskStep(state, "http://internal", "")).resolves.toMatchObject({ state: "pending" });
+        expect(mocks.resolveImages).not.toHaveBeenCalled();
+        expect(fetchMock.mock.calls[0][1].method || "GET").toBe("GET");
     });
 
     it("preserves maintenance authorization for the internal system proxy", () => {

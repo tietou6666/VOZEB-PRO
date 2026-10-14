@@ -6,10 +6,11 @@ import { fetchInternalApi } from "@/lib/server/internal-origin";
 import { resolveLogicalModel, resolveLogicalModelCandidates } from "@/lib/server/logical-model-router";
 import { assertCapabilityConstraints } from "@/lib/server/capability-constraints";
 import { reviewCreativeOutputs } from "@/lib/server/creative-review-service";
-import { requestStructuredText, type TextPlanningCandidate } from "@/lib/server/text-planning-runtime";
+import { requestStructuredText, type TextPlanningCandidate, type TextPlanningMessage } from "@/lib/server/text-planning-runtime";
 import { registerAgentTaskAssets } from "@/lib/server/agent-run-assets";
 import { buildAgentProjectHandoff } from "@/lib/server/agent-run-project-handoff";
 import { getAgentRun, updateAgentRunById, updateAgentRunTaskById, type AgentRun, type AgentRunChildTask, type AgentRunReference, type AgentRunTask } from "@/lib/server/agent-run-store";
+import { textWithImages } from "./agent-text-input";
 import { assetAccessUrl, creativeAssetContext, resolveTaskReferences } from "@/lib/server/agent-run-surface-policy";
 import { selectedCanvasNodeIds } from "@/lib/server/agent-run-canvas-snapshot";
 import { agentChildTaskTerminal, agentTaskCopies, resolveAgentTaskCount, resolveAgentVideoSeconds, validateAgentTaskResult, type AgentPlan } from "@/lib/server/agent-run-validation";
@@ -548,7 +549,7 @@ export async function requestFunctionCall(
     origin: string,
     cookie: string,
     candidate: TextPlanningCandidate,
-    input: Array<{ role: string; content: string }>,
+    input: TextPlanningMessage[],
     tool: typeof agentPlanTool,
     name: string,
     signal: AbortSignal,
@@ -762,6 +763,19 @@ export async function dispatchTask(task: AgentRunTask, origin: string, cookie: s
         if (!taskId) {
             const bodyForCopy = {
                 ...body,
+                ...(task.type === "text"
+                    ? {
+                          messages: [
+                              {
+                                  role: "user",
+                                  content: textWithImages(
+                                      task.prompt,
+                                      references.filter((reference) => reference.type === "image").map((reference) => reference.url),
+                                  ),
+                              },
+                          ],
+                      }
+                    : {}),
                 context: { ...context, clientRequestId: `${run.clientRequestId}:${task.id}:${attempt}:${index + 1}` },
             };
             const response = await fetchInternalApi(`${origin}${path}`, { method: "POST", headers: runtimeRequestHeaders(cookie, { "Content-Type": "application/json" }), body: JSON.stringify(bodyForCopy), cache: "no-store" });

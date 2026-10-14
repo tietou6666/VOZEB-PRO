@@ -16,6 +16,7 @@ import { maintenanceWorkerContextHeaders } from "@/lib/server/maintenance-auth";
 import { GenerationSubmissionSafeFailure, GenerationSubmissionUncertainError, generationSubmissionResponseError, generationSubmissionUncertainError } from "@/lib/server/generation-submission-error";
 import { resolveTextProtocol, type ResolvedTextProtocol } from "@/lib/server/text-protocol-resolver";
 import { refundTextTask, textTaskRefundIdempotencyKey } from "@/lib/server/text-task-refund";
+import { resolveTextMessageImages } from "./agent-text-input";
 
 configureServerProxyDispatcher();
 
@@ -65,13 +66,19 @@ export async function runTextTaskStep(task: TextTask, origin: string, cookie: st
     if (!running) return { state: "failed", error: "文本任务状态已变化" };
     if (running.upstream?.id) return queryCustomTextTaskStep(running, origin, cookie);
 
+    let messages: AiTextMessage[];
+    try {
+        messages = await resolveTextMessageImages(running.messages, running.userId);
+    } catch (error) {
+        return failTextTask(running, toSafeGenerationErrorMessage(error, "参考图片读取失败"), running.attempts || []);
+    }
     const candidates = [running.config, ...(running.candidateConfigs || [])];
     let attempts = running.attempts || [];
     let latestError: unknown;
     for (const [index, config] of candidates.entries()) {
         const started = startGenerationAttempt(attempts, { channelId: config.channelId, model: generationModelId(config), capability: "text" });
         attempts = started.attempts;
-        const candidateTask = { ...running, config, candidateConfigs: candidates.slice(index + 1), attemptNo: started.attempt.attemptNo, attempts };
+        const candidateTask = { ...running, messages, config, candidateConfigs: candidates.slice(index + 1), attemptNo: started.attempt.attemptNo, attempts };
         await updateTextTask(task.id, { config, candidateConfigs: candidateTask.candidateConfigs, attemptNo: candidateTask.attemptNo, attempts });
         await scheduleGenerationTask("text", task.id, {
             executionPhase: "submitting",

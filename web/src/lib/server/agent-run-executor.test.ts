@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AiTextMessage } from "@/types/ai";
 import type { CreativeConversationContext } from "@/lib/creative-runtime-contract";
 import { AGENT_PLAN_SCHEMA_VERSION } from "./agent-run-audit";
 import type { AgentRun, AgentRunTask } from "./agent-run-store";
@@ -539,9 +540,9 @@ describe("executeAgentRun backend settings", () => {
         await executeAgentRun(mocks.run, "http://localhost", "session=test");
 
         const planningCall = mocks.fetchInternalApi.mock.calls.find(([url]) => String(url).endsWith("/chat/completions"));
-        const planningBody = JSON.parse(String(planningCall?.[1]?.body)) as { messages: Array<{ content: string }> };
+        const planningBody = JSON.parse(String(planningCall?.[1]?.body)) as { messages: AiTextMessage[] };
         expect(planningBody.messages[0].content).toContain("你是 星河创作 画布创作 Agent");
-        const planningInput = JSON.parse(planningBody.messages[1].content) as { availableModels: Array<{ id: string; capability: string }> };
+        const planningInput = JSON.parse(planningMessageText(planningBody.messages[1])) as { availableModels: Array<{ id: string; capability: string }> };
         expect(planningInput.availableModels).toEqual(expect.arrayContaining([expect.objectContaining({ id: "image-default", capability: "image" }), expect.objectContaining({ id: "image-creative", capability: "image" })]));
         expect(mocks.run?.plannerContext).toMatchObject({
             serializedChars: expect.any(Number),
@@ -598,8 +599,8 @@ describe("executeAgentRun backend settings", () => {
 
         await executeAgentRun(mocks.run, "http://localhost", "session=test");
 
-        const body = JSON.parse(String(mocks.fetchInternalApi.mock.calls[0][1]?.body)) as { messages: Array<{ content: string }> };
-        expect(JSON.parse(body.messages[1].content)).toMatchObject({
+        const body = JSON.parse(String(mocks.fetchInternalApi.mock.calls[0][1]?.body)) as { messages: AiTextMessage[] };
+        expect(JSON.parse(planningMessageText(body.messages[1]))).toMatchObject({
             conversationContext: { summary: "用户正在制作统一的新中式女主角色。", recentMessages: [{ role: "assistant", content: "第二张采用红色服装。", sequence: 9 }] },
         });
         expect(mocks.getCreativeConversationContext).toHaveBeenCalledWith("conversation", "user", "agent-run");
@@ -624,11 +625,12 @@ describe("executeAgentRun backend settings", () => {
         await executeAgentRun(mocks.run, "http://localhost", "session=test");
 
         expect(mocks.listRecentCreativeMediaAssets).toHaveBeenCalledWith("conversation", "user", 6);
-        const planningBody = JSON.parse(String(mocks.fetchInternalApi.mock.calls.find(([url]) => String(url).endsWith("/chat/completions"))?.[1]?.body)) as { messages: Array<{ content: string }> };
-        expect(JSON.parse(planningBody.messages[1].content)).toMatchObject({
+        const planningBody = JSON.parse(String(mocks.fetchInternalApi.mock.calls.find(([url]) => String(url).endsWith("/chat/completions"))?.[1]?.body)) as { messages: AiTextMessage[] };
+        expect(JSON.parse(planningMessageText(planningBody.messages[1]))).toMatchObject({
             referenceContext: { source: "conversation-memory-candidates" },
             referencedAssets: [{ id: "asset-memory", title: "上一张角色图" }],
         });
+        expect(planningBody.messages[1].content).toEqual([expect.objectContaining({ type: "text" }), { type: "image_url", image_url: { url: "https://cdn.example.com/memory.png" } }]);
         const createBody = JSON.parse(String(mocks.fetchInternalApi.mock.calls.find(([url, init]) => init?.method === "POST" && String(url).endsWith("/api/image-tasks"))?.[1]?.body));
         expect(createBody.references).toEqual([{ dataUrl: "", url: "https://cdn.example.com/memory.png" }]);
     });
@@ -643,14 +645,59 @@ describe("executeAgentRun backend settings", () => {
         await executeAgentRun(mocks.run, "http://localhost", "session=test");
 
         expect(mocks.listRecentCreativeMediaAssets).not.toHaveBeenCalled();
-        const planningBody = JSON.parse(String(mocks.fetchInternalApi.mock.calls[0][1]?.body)) as { messages: Array<{ content: string }> };
-        expect(JSON.parse(planningBody.messages[1].content)).toMatchObject({
+        const planningBody = JSON.parse(String(mocks.fetchInternalApi.mock.calls[0][1]?.body)) as { messages: AiTextMessage[] };
+        expect(JSON.parse(planningMessageText(planningBody.messages[1]))).toMatchObject({
             referenceContext: { source: "current-turn-explicit" },
             referencedAssets: [
                 { id: "asset-first", alias: "@图片1", title: "第一张附件" },
                 { id: "asset-second", alias: "@图片2", title: "第二张附件" },
             ],
         });
+        expect(planningBody.messages[1].content).toEqual([
+            expect.objectContaining({ type: "text" }),
+            { type: "image_url", image_url: { url: "https://cdn.example.com/first.png" } },
+            { type: "image_url", image_url: { url: "https://cdn.example.com/second.png" } },
+        ]);
+    });
+
+    it("sends reference images with a text task that reverse-engineers prompts", async () => {
+        const task = { ...imageTask("reverse-prompt"), type: "text" as const, model: "planner", prompt: "反推提示词", references: [{ assetId: "source", type: "image" as const, url: "https://cdn.example.com/source.png" }] };
+        mocks.run = runWithTasks([task]);
+        mocks.getAuthSettings.mockResolvedValue(settings("image-model", "image-channel"));
+        mocks.fetchInternalApi.mockImplementation(async (url: string, init?: RequestInit) => {
+            if (init?.method === "POST") return Response.json({ task: { id: "text-child" } });
+            if (url.endsWith("/api/text-tasks/text-child")) return Response.json({ task: { status: "success", result: { content: "参考图的主体和光线" } } });
+            throw new Error("unexpected request: " + url);
+        });
+        await executeAgentRun(mocks.run, "http://localhost", "session=test");
+        const body = JSON.parse(String(mocks.fetchInternalApi.mock.calls.find(([url, init]) => String(url).endsWith("/api/text-tasks") && init?.method === "POST")?.[1]?.body));
+        expect(body.messages).toEqual([
+            {
+                role: "user",
+                content: [
+                    { type: "text", text: "反推提示词" },
+                    { type: "image_url", image_url: { url: "https://cdn.example.com/source.png" } },
+                ],
+            },
+        ]);
+        expect(mocks.run?.status).toBe("completed");
+    });
+
+    it("resumes an existing text child without re-reading its reference image", async () => {
+        const task = {
+            ...imageTask("reverse-prompt"),
+            type: "text" as const,
+            model: "planner",
+            taskId: "existing-text",
+            childTasks: [{ id: "existing-text", status: "pending" as const, attempt: 1 }],
+            references: [{ type: "image" as const, url: "/api/reference-assets/permanent/missing.png" }],
+        };
+        mocks.run = runWithTasks([task]);
+        mocks.getAuthSettings.mockResolvedValue(settings("image-model", "image-channel"));
+        mocks.fetchInternalApi.mockResolvedValue(Response.json({ task: { status: "success", result: { content: "已完成识图" } } }));
+        await executeAgentRun(mocks.run, "http://localhost", "session=test");
+        expect(mocks.fetchInternalApi.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+        expect(mocks.run?.status).toBe("completed");
     });
 
     it("does not attach an old candidate when the text model plans a new subject", async () => {
@@ -998,8 +1045,8 @@ describe("executeAgentRun backend settings", () => {
 
         await executeAgentRun(mocks.run, "http://localhost", "session=test");
 
-        const planningBody = JSON.parse(String(mocks.fetchInternalApi.mock.calls[0][1]?.body)) as { messages: Array<{ content: string }> };
-        expect(JSON.parse(planningBody.messages[1].content)).toMatchObject({ surface: "drama", projectId: "drama-project", projectSnapshot: { episodeId: "episode-one" } });
+        const planningBody = JSON.parse(String(mocks.fetchInternalApi.mock.calls[0][1]?.body)) as { messages: AiTextMessage[] };
+        expect(JSON.parse(planningMessageText(planningBody.messages[1]))).toMatchObject({ surface: "drama", projectId: "drama-project", projectSnapshot: { episodeId: "episode-one" } });
         expect(mocks.events.some((event) => event.type === "canvas.ops")).toBe(false);
         expect(mocks.run?.status).toBe("completed");
     });
@@ -1143,3 +1190,12 @@ describe("executeAgentRun backend settings", () => {
         expect(mocks.run?.status).toBe("cancelled");
     });
 });
+
+function planningMessageText(message: AiTextMessage) {
+    return typeof message.content === "string"
+        ? message.content
+        : message.content
+              .filter((part) => part.type === "text")
+              .map((part) => part.text)
+              .join("\n");
+}

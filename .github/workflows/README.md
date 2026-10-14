@@ -7,3 +7,11 @@
 - `docs-docker-image.yml`：构建并发布文档站多架构镜像。
 
 `main` 分支用于持续集成，`v*` 标签用于正式版本镜像发布。
+
+## Fork 与自有 GHCR
+
+主应用和文档镜像地址从当前 `owner/repository` 自动解析并转为小写，分别使用 `ghcr.io/owner/repository` 和 `ghcr.io/owner/repository-docs`；Fork 不会向官方账号发布镜像。工作流使用本仓库的 `GITHUB_TOKEN`，镜像发布任务显式声明 `packages: write`，无需把个人 Token 写入源码。
+
+Fork 后先启用仓库 Actions，将本地补丁提交到自己的仓库，再在 Actions 中选择 `Docker image`、点击 `Run workflow` 并选中包含补丁的分支。手动构建保留提交 SHA 镜像标签；只有符合现有版本标签规则的发布才更新 `latest`。应用与生成 Worker 应使用同一个已成功发布的镜像，部署时可固定 SHA 标签或 digest。质量、依赖审计、浏览器回归、Secret Scan、CodeQL、SBOM 与签名流程继续保留；检查失败时不会推送镜像，不能把仅触发工作流视为发布成功。
+
+后续通过 Fork 的 `Sync fork` 或合并上游分支接入官方更新；冲突需要解决并重新检查。保留自有补丁提交，禁止通过强制同步或覆盖分支丢弃优化。合并完成后，在包含优化的分支重新运行镜像工作流。GHCR 镜像为私有时，服务器需自行登录后拉取；本流程只发布镜像，不自动修改服务器 Compose 或部署服务。

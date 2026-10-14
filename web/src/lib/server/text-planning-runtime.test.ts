@@ -17,6 +17,20 @@ describe("text planning runtime protocol matrix", () => {
         vi.useRealTimers();
     });
 
+    it("preserves image bytes in both the streaming fallback and structure repair", async () => {
+        const content = [
+            { type: "text" as const, text: "分析图片" },
+            { type: "image_url" as const, image_url: { url: "data:image/png;base64,aW1hZ2U=" } },
+        ];
+        mockedFetch
+            .mockResolvedValueOnce(new Response("stream is not supported", { status: 400 }))
+            .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: "not JSON" } }] }))
+            .mockResolvedValueOnce(chatJsonResponse());
+        await requestStructuredText({ ...requestInput(candidate("newapi")), messages: [{ role: "user", content }], stream: true });
+        expect(mockedFetch).toHaveBeenCalledTimes(3);
+        for (const [, init] of mockedFetch.mock.calls) expect(JSON.parse(String(init?.body)).messages[1].content).toEqual(content);
+    });
+
     it.each(["openai", "sub2api", "newapi"] as const)("%s 严格预设直接使用基础 Chat", async (protocol) => {
         mockedFetch.mockResolvedValue(chatJsonResponse());
 

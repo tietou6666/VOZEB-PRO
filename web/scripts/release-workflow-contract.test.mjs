@@ -27,6 +27,29 @@ describe("release workflow contract", () => {
         expect(source).not.toMatch(/uses:\s+[^\s]+@(v\d|main|master)\b/);
     });
 
+    it.each([
+        ["docker-image.yml", ""],
+        ["docs-docker-image.yml", "-docs"],
+    ])("publishes %s to the current repository namespace through every image job", (file, suffix) => {
+        const document = parseDocument(workflow(file));
+        expect(document.errors).toEqual([]);
+        const config = document.toJS();
+        const { jobs } = config;
+        expect(config.env?.IMAGE_NAME).toBeUndefined();
+        const imageStep = jobs.meta.steps.find((step) => step.id === "image");
+        expect(imageStep.shell).toBe("bash");
+        expect(imageStep.run).toContain("name=ghcr.io/${GITHUB_REPOSITORY,,}" + suffix);
+        expect(jobs.meta.outputs.image).toBe("${{ steps.image.outputs.name }}");
+        expect(jobs.meta.steps.find((step) => step.id === "meta").with.images).toBe("${{ steps.image.outputs.name }}");
+        for (const job of [jobs.build, jobs.merge, jobs.attest]) {
+            expect(job.needs).toContain("meta");
+            expect(job.env.IMAGE_NAME).toBe("${{ needs.meta.outputs.image }}");
+            expect(job.permissions.packages).toBe("write");
+        }
+        expect(jobs.attest.needs).toContain("merge");
+        expect(workflow(file)).not.toContain("ghcr.io/csyqlz/");
+    });
+
     it("runs lint, tests, type-check, build and browser E2E in the main quality workflow", () => {
         const source = workflow("quality.yml");
 

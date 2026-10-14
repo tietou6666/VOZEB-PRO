@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
+import sharp from "sharp";
 
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+
+import { protocolFixtureState, resetProtocolFixture } from "./support";
 
 type MediaType = "image" | "video";
 type MediaSize = { width: number; height: number; label: string };
@@ -945,3 +948,34 @@ async function expectNoHorizontalOverflow(page: Page) {
     expect(widths.document[1], JSON.stringify(widths)).toBeLessThanOrEqual(widths.document[0] + 1);
     expect(widths.body[1], JSON.stringify(widths)).toBeLessThanOrEqual(widths.body[0] + 1);
 }
+
+test("Agent sends uploaded image bytes to both planning and reverse-prompt text requests", async ({ page, request }, testInfo) => {
+    await preparePage(page, testInfo);
+    await resetProtocolFixture(request);
+    const image = await sharp({ create: { width: 1280, height: 1024, channels: 3, background: "#3787be" } })
+        .png({ compressionLevel: 0 })
+        .toBuffer();
+    expect((image.length * 4) / 3).toBeGreaterThan(4 * 1024 * 1024);
+    const fileName = "agent-vision-reference.png";
+    await page.goto("/create", { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".creative-composer")).toHaveAttribute("data-ready", "true", { timeout: 45_000 });
+    const chooserPromise = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "添加素材" }).click();
+    await (await chooserPromise).setFiles({ name: fileName, mimeType: "image/png", buffer: image });
+    await expect(page.getByRole("img", { name: fileName })).toBeVisible();
+    await page.getByRole("textbox", { name: "输入你的创作想法、脚本或画面要求" }).fill("读取这张图片并反推提示词");
+    const runResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/agent/runs");
+    await page.getByRole("button", { name: "发送" }).click();
+    const runResponse = await runResponsePromise;
+    expect(runResponse.ok(), await runResponse.text()).toBe(true);
+    const runId = ((await runResponse.json()) as { data: { run: { id: string } } }).data.run.id;
+    await expect.poll(async () => ((await (await request.get("/api/agent/runs/" + runId)).json()) as { data: { run: { status: string } } }).data.run.status, { timeout: 60_000 }).toBe("completed");
+    await expect(page.getByText(/协议测试识图成功/).first()).toBeVisible();
+    const state = await protocolFixtureState(request);
+    const textCalls = state.requests.filter((item) => item.method === "POST" && item.path.endsWith("/chat/completions"));
+    expect(textCalls).toHaveLength(2);
+    expect(textCalls).toEqual([expect.objectContaining({ imageInputCount: 1, inlineImageBytes: image.length }), expect.objectContaining({ imageInputCount: 1, inlineImageBytes: image.length })]);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByText(/协议测试识图成功/).first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});

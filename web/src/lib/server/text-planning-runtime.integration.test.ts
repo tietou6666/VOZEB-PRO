@@ -58,6 +58,39 @@ describe("text planning runtime live protocol fixture", () => {
         expect(lastRequest().path).toMatch(/^\/api\/ai\/system\/globalaiopc\/(?:chat\/completions|responses)$/);
     });
 
+    it.each([
+        { protocol: "newapi" as const, options: {}, expected: "chat" },
+        { protocol: "compatible" as const, options: { createPath: "/responses" }, expected: "responses" },
+        { protocol: "compatible" as const, options: { apiFormat: "gemini" as const, createPath: "/models/:model:generateContent" }, expected: "gemini" },
+    ])("preserves actual image parts through $expected TCP requests", async ({ protocol, options, expected }) => {
+        const image = "data:image/png;base64,aW1hZ2U=";
+        const result = await requestStructuredText({
+            ...input(candidate(protocol, options)),
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: "返回图片分析 JSON" },
+                        { type: "image_url", image_url: { url: image } },
+                    ],
+                },
+            ],
+        });
+        expect(result).toMatchObject({ protocol: expected, arguments: "{}" });
+        const body = JSON.parse(lastRequest().body.toString("utf8"));
+        if (expected === "chat")
+            expect(body.messages[1].content).toEqual([
+                { type: "text", text: "返回图片分析 JSON" },
+                { type: "image_url", image_url: { url: image } },
+            ]);
+        if (expected === "responses")
+            expect(body.input[1].content).toEqual([
+                { type: "input_text", text: "返回图片分析 JSON" },
+                { type: "input_image", image_url: image },
+            ]);
+        if (expected === "gemini") expect(body.contents[0].parts).toEqual([{ text: "返回图片分析 JSON" }, { inlineData: { mimeType: "image/png", data: "aW1hZ2U=" } }]);
+    });
+
     it("reads Chat, Responses, Gemini and custom streaming contracts from the TCP fixture", async () => {
         const chat = await requestStructuredText({ ...input(candidate("newapi")), stream: true });
         expect(chat).toMatchObject({ protocol: "chat", transport: "stream", arguments: "{}" });

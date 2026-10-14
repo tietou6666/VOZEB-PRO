@@ -3,13 +3,13 @@ import { nanoid } from "nanoid";
 import { resolveLogicalModelCandidates } from "@/lib/server/logical-model-router";
 import { systemAiIdempotencyKey } from "@/lib/server/system-ai-billing";
 import { getAgentRun, updateAgentRunById, type AgentRun } from "@/lib/server/agent-run-store";
-import { agentPlannerSystemPrompt, agentPlanReply, buildAgentPlannerInput, conversationFallbackReply, plannerAgentSkills, prioritizeAgentPlannerModels, selectAgentSkills, taskPlanSummary } from "@/lib/server/agent-run-surface-policy";
+import { agentPlannerSystemPrompt, agentPlanReply, assetAccessUrl, buildAgentPlannerInput, conversationFallbackReply, plannerAgentSkills, prioritizeAgentPlannerModels, selectAgentSkills, taskPlanSummary } from "@/lib/server/agent-run-surface-policy";
 import { getCreativeAssetsByIds, getCreativeConversationContext, listRecentCreativeMediaAssets } from "@/lib/server/creative-runtime-store";
 import { toSafeGenerationErrorMessage } from "@/lib/server/generation-errors";
 import { parseAgentPlanCall, type AgentFunctionCallResult } from "./agent-function-call";
 import { agentModelOptions, agentPlanFallbackExample, agentPlanTool, canContinue, directAgentPlan, directGenerationPreferences, executeTasks, normalizeTasks, planToOps, refundFunctionCall, requestFunctionCall } from "./agent-run-execution";
 import { isExplicitProjectHandoffRequest, normalizeAgentProjectHandoff } from "./agent-run-project-handoff";
-import { normalizeCanvasPlanForSelection } from "./agent-run-task-input";
+import { normalizeCanvasPlanForSelection, selectedCanvasReferenceNodes } from "./agent-run-task-input";
 import { GenerationSubmissionUncertainError } from "@/lib/server/generation-submission-error";
 import { rankTextPlanningCandidates } from "@/lib/server/text-planning-runtime";
 import { filterAgentPlannerModels } from "@/lib/server/agent-run-planning-profile";
@@ -17,6 +17,7 @@ import { buildAgentRunPlannerAudit } from "@/lib/server/agent-run-audit";
 import { agentRequestDigest, buildAgentRequest, serializeAgentRequest } from "@/lib/server/agent-prompt-json";
 import { orderCreativeAssetsByIds } from "@/lib/creative-asset-references";
 import { withDirectAgentExecutionContext } from "./agent-run-direct-context";
+import { agentTextContent } from "./agent-text-input";
 
 const globalAgentExecutors = globalThis as typeof globalThis & { __vozebProAgentRunControllers?: Map<string, AbortController> };
 const controllers = (globalAgentExecutors.__vozebProAgentRunControllers ??= new Map<string, AbortController>());
@@ -106,7 +107,18 @@ export async function executeAgentRun(run: AgentRun, origin: string, cookie: str
             },
             {
                 role: "user",
-                content: serializeAgentRequest(plannerRequest),
+                content: await agentTextContent(
+                    serializeAgentRequest(plannerRequest),
+                    [
+                        ...referencedAssets.filter((asset) => asset.type === "image").flatMap((asset) => assetAccessUrl(asset) || []),
+                        ...(claimed.surface === "canvas"
+                            ? selectedCanvasReferenceNodes(claimed.snapshot)
+                                  .filter((node) => node.type === "image")
+                                  .map((node) => node.url)
+                            : []),
+                    ],
+                    claimed.userId,
+                ),
             },
         ];
         if (

@@ -71,6 +71,8 @@ async function handleFixtureRequest({ request, response, url, body, tasks, reque
                     contentType: item.contentType,
                     bodyBytes: item.body.byteLength,
                     model: requestedModel(item.body, item.contentType),
+                    imageInputCount: requestImages(jsonBody(item.body)).length,
+                    inlineImageBytes: requestImages(jsonBody(item.body)).reduce((total, image) => total + (image.startsWith("data:") ? Buffer.byteLength(image.split(",", 2)[1], "base64") : 0), 0),
                 })),
             tasks: Array.from(tasks.entries()).map(([id, task]) => ({ id, ...task })),
         });
@@ -110,7 +112,13 @@ async function handleFixtureRequest({ request, response, url, body, tasks, reque
         const model = requestedModel(body, request.headers["content-type"] || "");
         if (shouldFailRequest(request, model)) return sendJson(response, model.includes("-fail") ? 400 : 503, { error: { message: "fixture text failure" } });
         const toolName = selectedToolName(payload);
-        const argumentsText = toolName ? JSON.stringify(toolArguments(toolName, payload)) : "协议测试文本返回成功";
+        const argumentsText = toolName
+            ? JSON.stringify(toolArguments(toolName, payload))
+            : plannerRequestText(payload).includes("反推提示词")
+              ? requestImages(payload).length
+                  ? "协议测试识图成功：已收到实际图片，可以反推提示词。"
+                  : "无法读取实际图像内容"
+              : "协议测试文本返回成功";
         if (payload.stream === true) return sendStructuredTextStream(response, path, toolName, argumentsText);
         if (path === "/responses") {
             return sendJson(response, 200, toolName ? { output: [{ type: "function_call", name: toolName, arguments: argumentsText }] } : { output_text: argumentsText });
@@ -340,6 +348,18 @@ function toolArguments(name, payload) {
         };
     }
     if (name === "create_agent_plan") {
+        if (plannerRequestText(payload).includes("反推提示词")) {
+            const input = JSON.parse(plannerRequestText(payload));
+            return {
+                intent: "generation",
+                objective: "读取参考图并反推提示词",
+                audience: "协议测试用户",
+                reply: "已收到，我会读取图片并反推提示词。",
+                decisions: [],
+                foundation: { complexity: "simple", brief: { objective: "反推提示词" }, direction: { summary: "以实际参考图为准" } },
+                deliverables: [{ id: "fixture-visual-text", title: "图片反推提示词", type: "text", model: "e2e-text", prompt: "读取参考图并反推提示词", count: 1, assetIds: input.referencedAssets.map((asset) => asset.id), dependencies: [] }],
+            };
+        }
         if (plannerGenerationMode(payload) === "video") {
             return {
                 intent: "generation",
@@ -499,7 +519,19 @@ function plannerRequestText(payload) {
     const messages = [...(Array.isArray(payload.input) ? payload.input : []), ...(Array.isArray(payload.messages) ? payload.messages : [])];
     const userMessage = messages.findLast((message) => message?.role === "user");
     const content = userMessage?.content ?? (typeof payload.input === "string" ? payload.input : "");
-    return typeof content === "string" ? content : JSON.stringify(content);
+    return typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? content
+                .filter((part) => typeof part.text === "string")
+                .map((part) => part.text)
+                .join("\n")
+          : "";
+}
+
+function requestImages(payload) {
+    const messages = [...(Array.isArray(payload.messages) ? payload.messages : []), ...(Array.isArray(payload.input) ? payload.input : [])];
+    return messages.flatMap((message) => (Array.isArray(message.content) ? message.content : [])).flatMap((part) => (part.type === "image_url" ? [part.image_url.url] : part.type === "input_image" ? [part.image_url] : []));
 }
 
 function dramaSourceText(payload) {
