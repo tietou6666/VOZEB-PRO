@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reviewDependencyAudit } from "./dependency-audit.mjs";
+import { bracesFixUnavailable, reviewDependencyAudit } from "./dependency-audit.mjs";
 
 const advisory = () => ({
     github_advisory_id: "GHSA-vfj7-8cjw-p6xm",
@@ -13,7 +13,7 @@ const report = (item) => ({ advisories: { braces: item }, metadata: { vulnerabil
 describe("dependency audit development exception", () => {
     it("only accepts the known unpatched advisory in the existing development tools", () => {
         const item = advisory();
-        expect(reviewDependencyAudit(report(item))).toEqual({ accepted: [item], blocked: [] });
+        expect(reviewDependencyAudit(report(item), { fixUnavailable: true })).toEqual({ accepted: [item], blocked: [] });
     });
     it.each([
         [
@@ -31,7 +31,7 @@ describe("dependency audit development exception", () => {
         [
             "available upstream fix",
             (item) => {
-                item.patched_versions = ">=3.0.4";
+                item.patched_versions = ">=3.0.5";
             },
         ],
         [
@@ -49,12 +49,31 @@ describe("dependency audit development exception", () => {
     ])("blocks %s", (_name, change) => {
         const item = advisory();
         change(item);
-        expect(reviewDependencyAudit(report(item))).toEqual({ accepted: [], blocked: [item] });
+        expect(reviewDependencyAudit(report(item), { fixUnavailable: true })).toEqual({ accepted: [], blocked: [item] });
     });
     it("rejects missing details for a nonempty vulnerability count", () => {
         expect(() => reviewDependencyAudit({ advisories: {}, metadata: { vulnerabilities: { high: 1 } } })).toThrow("依赖审计缺少漏洞明细");
     });
     it("rejects a registry error instead of treating it as an empty audit", () => {
         expect(() => reviewDependencyAudit({ error: "registry unavailable" })).toThrow("依赖审计响应无效");
+    });
+});
+
+describe("published braces fix lookup", () => {
+    it("accepts pnpm's projected range only after the registry confirms no released fix", () => {
+        const item = advisory();
+        item.patched_versions = ">=3.0.4";
+        expect(reviewDependencyAudit(report(item), { fixUnavailable: true }).blocked).toEqual([]);
+        expect(reviewDependencyAudit(report(item)).blocked).toEqual([item]);
+        expect(bracesFixUnavailable({ status: 1, stdout: JSON.stringify({ error: { code: "ERR_PNPM_PACKAGE_NOT_FOUND" } }) })).toBe(true);
+    });
+    it("blocks the exception when any matching fixed version is published", () => {
+        expect(bracesFixUnavailable({ status: 0, stdout: JSON.stringify("3.0.4") })).toBe(false);
+        expect(bracesFixUnavailable({ status: 0, stdout: JSON.stringify(["3.0.5", "4.0.0"]) })).toBe(false);
+        expect(reviewDependencyAudit(report(advisory()), { fixUnavailable: false }).blocked).toHaveLength(1);
+    });
+    it("rejects lookup network errors and empty responses", () => {
+        expect(() => bracesFixUnavailable({ status: 1, stdout: JSON.stringify({ error: { code: "ECONNRESET" } }) })).toThrow("修复版本查询响应无效");
+        expect(() => bracesFixUnavailable({ status: 0, stdout: "" })).toThrow();
     });
 });

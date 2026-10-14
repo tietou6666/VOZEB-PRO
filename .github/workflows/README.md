@@ -18,4 +18,4 @@ Fork 后先启用仓库 Actions，将本地补丁提交到自己的仓库，再�
 
 ## 主应用依赖审计
 
-主应用质量与发布检查先执行 `pnpm audit --prod --audit-level moderate`，再执行 `node scripts/dependency-audit.mjs` 审查完整依赖树。唯一例外为尚无修复版本的 `GHSA-vfj7-8cjw-p6xm`：必须是 `braces@3.0.3` 且仅来自现有 `eslint-config-next` / `shadcn` 开发依赖路径；生产依赖、新路径、不同公告或出现修复版本都会阻断。脚本打印原始统计和例外，不能宣称完整依赖零漏洞。运行镜像额外验证无法加载 `braces`。上游发布修复后需升级并移除例外；文档站仍沿用自己的严格审计。
+主应用质量与发布检查先执行 `pnpm audit --prod --audit-level moderate`，再执行 `node scripts/dependency-audit.mjs` 审查完整依赖树。唯一例外为尚无可安装修复版本的 `GHSA-vfj7-8cjw-p6xm`：必须是 `braces@3.0.3` 且仅来自现有 `eslint-config-next` / `shadcn` 开发依赖路径；生产依赖、新路径、不同公告或实际发布可安装修复版本都会阻断。脚本打印原始统计和例外，不能宣称完整依赖零漏洞。运行镜像额外验证无法加载 `braces`。上游发布修复后需升级并移除例外；文档站仍沿用自己的严格审计。
