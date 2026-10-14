@@ -123,7 +123,7 @@ async function createPageFixtures(request: APIRequestContext, viewportWidth: num
 }
 
 async function setTheme(page: Page, theme: "light" | "dark") {
-    if (page.url() === "about:blank") await page.goto("/", { waitUntil: "domcontentloaded" });
+    if (page.url() === "about:blank") await page.goto("/api/auth/session", { waitUntil: "domcontentloaded" });
     await page.evaluate((nextTheme) => localStorage.setItem("vozeb-pro:theme_store", JSON.stringify({ state: { theme: nextTheme }, version: 0 })), theme);
 }
 
