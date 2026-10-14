@@ -40,7 +40,8 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level moderate
+      - run: pnpm audit --prod --audit-level moderate
+      - run: node scripts/dependency-audit.mjs
       - run: pnpm run lint
       - run: pnpm run typecheck
       - run: pnpm test

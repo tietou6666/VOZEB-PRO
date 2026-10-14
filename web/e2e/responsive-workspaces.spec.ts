@@ -30,11 +30,15 @@ test("creative workspaces remain usable without horizontal overflow in light and
     await page.getByRole("button", { name: "新建短剧" }).click();
     const createDialog = page.getByRole("dialog", { name: "新建短剧项目" });
     await expect(createDialog).toBeVisible();
-    const dialogBox = await createDialog.boundingBox();
-    const ratioLabelBox = await createDialog.getByText("生成尺寸", { exact: true }).boundingBox();
-    const ratioControlBox = await createDialog.locator(".ant-segmented").boundingBox();
-    expect(dialogBox?.width || 0).toBeLessThanOrEqual(Math.min(522, (page.viewportSize()?.width || 0) - 22));
-    expect((ratioLabelBox?.y || 0) + (ratioLabelBox?.height || 0)).toBeLessThanOrEqual((ratioControlBox?.y || 0) + 1);
+    // Measure together so the opening animation cannot move the dialog between samples.
+    const layout = await createDialog.evaluate((dialog) => {
+        const label = Array.from(dialog.querySelectorAll("span")).find((element) => element.textContent === "生成尺寸");
+        const control = dialog.querySelector(".ant-segmented");
+        if (!label || !control) throw new Error("新建短剧弹窗缺少尺寸控件");
+        return { width: dialog.getBoundingClientRect().width, labelBottom: label.getBoundingClientRect().bottom, controlTop: control.getBoundingClientRect().top };
+    });
+    expect(layout.width).toBeLessThanOrEqual(Math.min(522, (page.viewportSize()?.width || 0) - 22));
+    expect(layout.labelBottom).toBeLessThanOrEqual(layout.controlTop + 1);
     await createDialog.getByRole("button", { name: /取\s*消/ }).click();
     const projectEntry = page.locator(`a[href="${dramaRoute}"]`);
     await expect(projectEntry).toHaveAttribute("aria-label", "进入短剧项目：E2E 短剧项目");

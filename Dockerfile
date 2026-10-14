@@ -59,6 +59,7 @@ COPY web/scripts/disaster-backup.mjs /app/web/scripts/disaster-backup.mjs
 COPY web/scripts/disaster-restore.mjs /app/web/scripts/disaster-restore.mjs
 
 RUN cd /app/web && node -e "require('sharp')"
+RUN cd /app/web && node -e "try { require.resolve('braces'); process.exit(1); } catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }"
 RUN mkdir -p /app/web/.data && chown -R node:node /app/web
 
 EXPOSE 3000

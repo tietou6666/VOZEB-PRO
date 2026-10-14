@@ -73,6 +73,17 @@ describe("release workflow contract", () => {
         expect(step?.run).toContain("pnpm exec vitest run --no-file-parallelism");
     });
 
+    it.each([
+        ["quality.yml", "web"],
+        ["docker-image.yml", "quality"],
+    ])("keeps production auditing strict and reviews development exceptions in %s", (file, job) => {
+        const steps = parseDocument(workflow(file)).toJS().jobs[job].steps;
+        const commands = steps.map((step) => step.run || "").join("\n");
+        expect(commands).toContain("pnpm audit --prod --audit-level moderate");
+        expect(commands).toContain("node scripts/dependency-audit.mjs");
+        expect(steps.some((step) => step["continue-on-error"])).toBe(false);
+    });
+
     it("declares one pnpm version for the repository and both Docker builds", () => {
         const rootPackage = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
         const appDockerfile = readFileSync(path.join(repoRoot, "Dockerfile"), "utf8");
