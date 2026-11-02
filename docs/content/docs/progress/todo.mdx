@@ -7,7 +7,7 @@ description: 当前项目后续值得处理的事项
 
 本文档用来记录当前项目后续比较值得处理的事项。
 
-- v0.0.7-fix.1 GHCR 发布与服务器验收：待 GitHub Actions 通过后确认 `ghcr.io/tietou6666/vozeb-pro:latest` 的实际 digest，再由用户手动修改服务器 Compose 并验收真实 New API → Aether 识图链路。
+- 清理 `vozeb-pro-docs` GHCR 中旧的 v0.0.9/v0.0.10 容器 tag；当前 GitHub Packages API 凭据没有包读取/管理权限。`v0.0.7-fix.1` 应用和文档双架构镜像已发布，服务器 Compose 仍由用户手动切换并验收真实 New API → Aether 识图链路。
 
 - 浏览器回归辅助代码：短剧弹窗尺寸标签与控件已改为同次测量矩形，三端回归通过；页面矩阵主题初始化改为先打开同源 Session JSON，避免首页立即重载使旧请求响应读取一直等待，相关 9 项三端复测均通过。本地完整矩阵经失败复核后合计 142 项通过、18 项按现有契约跳过；远端专用 PostgreSQL 浏览器矩阵已完成，143 项通过、17 项按既有契约跳过。没有添加固定等待或修改产品布局。
 
