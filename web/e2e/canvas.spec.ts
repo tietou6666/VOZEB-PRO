@@ -199,6 +199,7 @@ test("canvas keeps editing, selection, linking and persistence fluid", async ({ 
 });
 
 test("canvas node prompt keeps image and video mentions after long text", async ({ page, request }) => {
+    await page.addInitScript(() => localStorage.setItem("vozeb-pro:theme_store", JSON.stringify({ state: { theme: "light" }, version: 0 })));
     const project = await createCanvasProject(request, {
         title: `Canvas 节点长提示词引用 ${randomUUID().slice(0, 8)}`,
         nodes: [
@@ -214,6 +215,7 @@ test("canvas node prompt keeps image and video mentions after long text", async 
 
     try {
         await page.goto(`/canvas/${project.id}`, { waitUntil: "domcontentloaded" });
+        await page.getByRole("button", { name: "收起 Agent 面板" }).click();
         await page.locator('[data-node-id="prompt-target"]').click({ position: { x: 40, y: 40 } });
         const prompt = page.getByRole("textbox", { name: "节点提示词" });
         await expect(prompt).toBeVisible({ timeout: 20_000 });
@@ -234,12 +236,60 @@ test("canvas node prompt keeps image and video mentions after long text", async 
         await expect(videoOption.locator("video")).toBeVisible();
         await videoOption.click();
         await expect(prompt).toHaveValue(`${longText}\n先参考图片1 再结合视频1 `);
-        await expect(page.locator('[data-canvas-resource-reference="prompt-image"] img')).toBeVisible();
-        await expect(page.locator('[data-canvas-resource-reference="prompt-video"] video')).toBeVisible();
+        await expect(prompt.locator("..").locator('[data-canvas-resource-reference="prompt-image"]')).toBeVisible();
+        await expect(prompt.locator("..").locator('[data-canvas-resource-reference="prompt-video"]')).toBeVisible();
+
+        for (const theme of ["light", "dark"]) {
+            if (theme === "dark") await page.getByRole("button", { name: "切换到深色主题" }).click();
+            for (const width of [1280, 390, 430]) {
+                await page.setViewportSize({ width, height: 900 });
+                await prompt.focus();
+                await prompt.press("ControlOrMeta+End");
+                await prompt.press("ArrowLeft");
+                await prompt.press("x");
+                await expectMentionCaret(prompt);
+                await prompt.press("Shift+ArrowLeft");
+                await expect(prompt).not.toHaveCSS("color", "rgba(0, 0, 0, 0)");
+                await prompt.press("ArrowRight");
+                await expectMentionCaret(prompt);
+                await page.getByRole("button", { name: "放大提示词输入" }).click();
+                const dialog = page.getByRole("dialog", { name: "编辑提示词" });
+                const expanded = dialog.getByRole("textbox", { name: "提示词编辑器" });
+                await expect(expanded).toBeFocused();
+                await expanded.press("ControlOrMeta+End");
+                await expectMentionCaret(expanded);
+                await expectNoHorizontalOverflow(page, `Canvas 光标 ${theme} ${width}px`);
+                await page.screenshot({ path: test.info().outputPath(`caret-${theme}-${width}.png`), caret: "initial" });
+                await dialog.getByRole("button", { name: "收起提示词输入" }).click();
+                await expect(dialog).toBeHidden();
+            }
+        }
     } finally {
         await deleteCanvasProject(request, project.id);
     }
 });
+
+async function expectMentionCaret(prompt: Locator) {
+    await expect(prompt).toHaveCSS("color", "rgba(0, 0, 0, 0)");
+    await expect
+        .poll(() =>
+            prompt.evaluate((textarea: HTMLTextAreaElement) => {
+                const overlay = textarea.previousElementSibling as HTMLElement;
+                const style = getComputedStyle(textarea);
+                const token = overlay.querySelector<HTMLElement>("[data-canvas-resource-reference]")!;
+                const context = document.createElement("canvas").getContext("2d")!;
+                context.font = style.font;
+                return {
+                    positioned: style.position === "relative",
+                    aboveOverlay: Number(style.zIndex) > Number(getComputedStyle(overlay).zIndex),
+                    visibleCaret: style.caretColor !== "transparent" && style.caretColor !== "rgba(0, 0, 0, 0)",
+                    scrollAligned: Math.abs(textarea.scrollTop - overlay.scrollTop) <= 1,
+                    widthAligned: Math.abs(token.offsetWidth - context.measureText(token.firstElementChild!.textContent!).width) <= 1,
+                };
+            }),
+        )
+        .toEqual({ positioned: true, aboveOverlay: true, visibleCaret: true, scrollAligned: true, widthAligned: true });
+}
 
 test("canvas video first and last frame roles persist and retry from the output snapshot", async ({ page, request }) => {
     test.setTimeout(120_000);

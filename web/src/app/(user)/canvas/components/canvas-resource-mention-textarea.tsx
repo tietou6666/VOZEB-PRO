@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, PointerEvent, TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Image as ImageIcon, Music2, Video } from "lucide-react";
@@ -102,6 +102,16 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
 
     const hasActiveLabelInValue = activeLabels.some((label) => value.includes(label));
     const showOverlay = Boolean(value && hasActiveLabelInValue && !hasSelection);
+    useLayoutEffect(() => {
+        const textarea = textareaRef.current;
+        const overlay = overlayRef.current;
+        if (!textarea || !overlay) return;
+        const computed = getComputedStyle(textarea);
+        overlay.style.font = computed.font;
+        overlay.style.letterSpacing = computed.letterSpacing;
+        overlay.scrollTop = textarea.scrollTop;
+        overlay.scrollLeft = textarea.scrollLeft;
+    }, [showOverlay, value, className, style]);
     const mergedStyle = {
         ...(style || {}),
         color: showOverlay ? "transparent" : style?.color,
@@ -193,7 +203,7 @@ function MentionHighlightText({ value, labels, references, placeholder, inline =
 function ReferenceToken({ reference, inline = false }: { reference: CanvasResourceReference; inline?: boolean }) {
     if (inline) {
         return (
-            <span data-canvas-resource-reference={reference.nodeId} title={reference.title} className="relative inline-block max-w-full align-baseline font-medium text-transparent">
+            <span data-canvas-resource-reference={reference.nodeId} title={reference.title} className="relative inline-block max-w-full align-baseline text-transparent">
                 <span className="whitespace-pre">{reference.label}</span>
                 <span className="absolute inset-0 inline-flex min-w-0 items-center justify-center overflow-hidden rounded-[3px] bg-[#2f80ff]/12 text-[#2f80ff] ring-1 ring-[#2f80ff]/24">
                     <span className="min-w-0 truncate">{reference.label}</span>
