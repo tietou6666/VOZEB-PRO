@@ -291,6 +291,45 @@ async function expectMentionCaret(prompt: Locator) {
         .toEqual({ positioned: true, aboveOverlay: true, visibleCaret: true, scrollAligned: true, widthAligned: true });
 }
 
+test("canvas node prompt resizes freely within the viewport", async ({ page, request }) => {
+    const project = await createCanvasProject(request, {
+        title: `Canvas 提示词尺寸 ${randomUUID().slice(0, 8)}`,
+        viewport: { x: 80, y: 100, k: 1 },
+        nodes: [node("prompt-resize", "image", 180, 110, 260, 200, {})],
+        connections: [],
+    });
+
+    try {
+        await page.goto(`/canvas/${project.id}`, { waitUntil: "domcontentloaded" });
+        await page.locator('[data-node-id="prompt-resize"]').click({ position: { x: 40, y: 40 } });
+        const prompt = page.getByRole("textbox", { name: "节点提示词" });
+        const panel = page.locator("[data-canvas-node-panel]");
+        const handle = page.getByRole("button", { name: "调整提示词输入框大小" });
+        await expect(prompt).toBeVisible({ timeout: 20_000 });
+        await expect(handle).toBeVisible();
+        const initialPanel = await panel.boundingBox();
+        const initialInput = await prompt.boundingBox();
+        const handleBox = await handle.boundingBox();
+        expect(initialPanel).not.toBeNull();
+        expect(initialInput).not.toBeNull();
+        expect(handleBox).not.toBeNull();
+        const verticalDirection = (await panel.getAttribute("data-canvas-node-panel-placement")) === "top" ? -1 : 1;
+        await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(handleBox!.x + handleBox!.width / 2 + 64, handleBox!.y + handleBox!.height / 2 + verticalDirection * 48, { steps: 6 });
+        await page.mouse.up();
+        await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(initialPanel!.width + 40);
+        await expect.poll(async () => (await prompt.boundingBox())!.height).toBeGreaterThan(initialInput!.height + 30);
+        const resizedPanel = await panel.boundingBox();
+        const viewport = page.viewportSize();
+        expect(resizedPanel!.x).toBeGreaterThanOrEqual(-1);
+        expect(resizedPanel!.x + resizedPanel!.width).toBeLessThanOrEqual((viewport?.width || 0) + 1);
+        await expectNoHorizontalOverflow(page, "canvas prompt resize");
+    } finally {
+        await deleteCanvasProject(request, project.id);
+    }
+});
+
 test("canvas video first and last frame roles persist and retry from the output snapshot", async ({ page, request }) => {
     test.setTimeout(120_000);
     const project = await createCanvasProject(request, {

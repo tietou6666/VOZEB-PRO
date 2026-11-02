@@ -381,7 +381,7 @@ function VozebProCanvasPage() {
                         resourceLabel: resourceReferenceByNodeId.get(node.id),
                         mentionReferences: mentionReferencesByNodeId.get(node.id) || [],
                     })}
-                    renderPanel={(panelNode) =>
+                    renderPanel={(panelNode, resize) =>
                         panelNode.type === CanvasNodeType.Config ? (
                             <CanvasConfigComposer
                                 value={panelNode.metadata?.composerContent ?? panelNode.metadata?.prompt ?? ""}
@@ -398,6 +398,8 @@ function VozebProCanvasPage() {
                                 onConfigChange={handleConfigNodeChange}
                                 onGenerate={handleGenerateNode}
                                 onStop={confirmStopGeneration}
+                                onPanelResizeStart={resize.onResizeStart}
+                                onPanelResizeBy={resize.onResizeBy}
                                 onImageSettingsOpenChange={(open) => {
                                     setNodeImageSettingsOpen(open);
                                     if (open) setToolbarNodeId(null);

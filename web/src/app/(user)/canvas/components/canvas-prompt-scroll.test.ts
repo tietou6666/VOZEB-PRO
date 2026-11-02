@@ -13,6 +13,9 @@ describe("Canvas prompt scrolling", () => {
         expect(source).toContain('data-canvas-prompt-scroll="node"');
         expect(source).toContain('data-canvas-prompt-scroll="expanded"');
         expect(source.match(/overflow-y-auto overscroll-contain/g)).toHaveLength(2);
+        expect(source).toContain("h-[var(--canvas-prompt-input-height,6rem)]");
+        expect(source).toContain("data-canvas-prompt-resize-handle");
+        expect(source).toContain('event.key === "ArrowRight"');
     });
 
     it("bounds the config composer before enabling vertical scrolling", async () => {

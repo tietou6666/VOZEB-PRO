@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { App } from "antd";
 import { APP_VERSION } from "@/constant/env";
 import { parseChangelog, type ReleaseInfo } from "@/lib/release";
+import { compareVersions } from "@/lib/version";
 
 const latestVersionUrl = "https://raw.githubusercontent.com/csyqlz/VOZEB-PRO/main/VERSION";
 const latestChangelogUrl = "https://raw.githubusercontent.com/csyqlz/VOZEB-PRO/main/CHANGELOG.md";
@@ -24,16 +25,6 @@ function toVersionParts(version: string) {
 
 function isNewerVersion(latestVersion: string, currentVersion: string) {
     return compareVersions(latestVersion, currentVersion) > 0;
-}
-
-function compareVersions(a: string, b: string) {
-    const left = toVersionParts(a);
-    const right = toVersionParts(b);
-    if (!left || !right) return 0;
-    for (let index = 0; index < left.length; index += 1) {
-        if (left[index] !== right[index]) return left[index] - right[index];
-    }
-    return 0;
 }
 
 function mergeReleases(primary: ReleaseInfo[], secondary: ReleaseInfo[]) {

@@ -1,6 +1,6 @@
 {
     "name": "vozeb-pro",
-    "version": "0.0.7",
+    "version": "0.0.7-fix.2",
     "private": true,
     "type": "module",
     "scripts": {

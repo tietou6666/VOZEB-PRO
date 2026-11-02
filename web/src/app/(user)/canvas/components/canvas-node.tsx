@@ -13,6 +13,10 @@ import type { CanvasResourceReference } from "../utils/canvas-resource-reference
 import { isCanvasVideoControlPoint } from "../utils/canvas-surface-geometry";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+export type CanvasNodePanelResizeHandlers = {
+    onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
+    onResizeBy: (deltaWidth: number, deltaHeight: number) => void;
+};
 const selectionBlue = "#2f80ff";
 
 function isInteractiveTarget(target: EventTarget | null, event?: Pick<MouseEvent, "clientY">) {
@@ -39,7 +43,7 @@ export type CanvasNodeProps = {
     showImageInfo: boolean;
     resourceLabel?: CanvasResourceReference;
     mentionReferences?: CanvasResourceReference[];
-    renderPanel?: (node: CanvasNodeData) => ReactNode;
+    renderPanel?: (node: CanvasNodeData, resize: CanvasNodePanelResizeHandlers) => ReactNode;
     renderNodeContent?: (node: CanvasNodeData) => ReactNode;
     batchCount?: number;
     batchExpanded?: boolean;
@@ -129,10 +133,13 @@ export const CanvasNode = React.memo(function CanvasNode({
     const [panelPlacement, setPanelPlacement] = useState<"top" | "bottom">("bottom");
     const [panelMaxHeight, setPanelMaxHeight] = useState<number>();
     const [panelMaxWidth, setPanelMaxWidth] = useState<number>();
+    const [panelWidth, setPanelWidth] = useState(500);
+    const [promptInputHeight, setPromptInputHeight] = useState(96);
     const [panelOffsetX, setPanelOffsetX] = useState(0);
     const nodeRef = useRef<HTMLDivElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
     const panelOffsetXRef = useRef(0);
+    const panelResizeCleanupRef = useRef<(() => void) | null>(null);
     const hasImageContent = isCanvasImageNodeType(data.type) && Boolean(data.metadata?.content);
     const hasVideoContent = data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content);
@@ -355,14 +362,85 @@ export const CanvasNode = React.memo(function CanvasNode({
         const nextOffsetX = (desiredCenter - centeredPanelCenter) / renderedScale;
         const spaceAbove = Math.max(0, nodeRect.top - usableTop - 16);
         const spaceBelow = Math.max(0, usableBottom - nodeRect.bottom);
-        const nextPlacement = panelRect.bottom > usableBottom && spaceAbove >= 96 ? "top" : "bottom";
-        const availableSpace = nextPlacement === "top" ? spaceAbove : spaceBelow;
+        const panelContentHeight = panelElement.scrollHeight;
+        const nextPlacement = panelContentHeight > spaceBelow / renderedScale && spaceAbove > spaceBelow ? "top" : "bottom";
+        const availableSpace = (nextPlacement === "top" ? spaceAbove : spaceBelow) / renderedScale;
         setPanelPlacement((current) => (current === nextPlacement ? current : nextPlacement));
         if (availableSpace > 0) setPanelMaxHeight((current) => (current === availableSpace ? current : availableSpace));
         if (nextMaxWidth) setPanelMaxWidth((current) => (current !== undefined && Math.abs(current - nextMaxWidth) < 0.1 ? current : nextMaxWidth));
         panelOffsetXRef.current = nextOffsetX;
         setPanelOffsetX((current) => (Math.abs(current - nextOffsetX) < 0.1 ? current : nextOffsetX));
     }, [scale, showPanel]);
+
+    const resizePromptPanelBy = useCallback(
+        (startWidth: number, startHeight: number, deltaWidth: number, deltaHeight: number, startOffset = panelOffsetXRef.current) => {
+            const renderedScale = Math.max(scale, 0.01);
+            const maxWidth = Math.max(1, panelMaxWidth ?? (window.innerWidth - 32) / renderedScale);
+            const minWidth = Math.min(280, maxWidth);
+            const nextWidth = Math.min(maxWidth, Math.max(minWidth, startWidth + deltaWidth));
+            const minHeight = 96;
+            const panelElement = panelRef.current;
+            const textarea = panelElement?.querySelector<HTMLTextAreaElement>('[data-canvas-prompt-scroll="node"]');
+            const fixedHeight = panelElement && textarea ? panelElement.scrollHeight - textarea.clientHeight : 160;
+            const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+            const maxHeight = Math.max(minHeight, viewportHeight / renderedScale - fixedHeight - 32);
+            const nextHeight = Math.min(maxHeight, Math.max(minHeight, startHeight + deltaHeight));
+            const nextOffset = startOffset + (nextWidth - startWidth) / 2;
+            setPanelWidth(nextWidth);
+            setPromptInputHeight(nextHeight);
+            if (panelElement && nextHeight > startHeight) requestAnimationFrame(() => (panelElement.scrollTop = panelElement.scrollHeight));
+            panelOffsetXRef.current = nextOffset;
+            setPanelOffsetX(nextOffset);
+        },
+        [panelMaxWidth, scale],
+    );
+
+    const handlePanelResizeStart = useCallback(
+        (event: React.PointerEvent<HTMLButtonElement>) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            event.stopPropagation();
+            panelResizeCleanupRef.current?.();
+            const panelElement = panelRef.current;
+            const textarea = panelElement?.querySelector<HTMLTextAreaElement>('[data-canvas-prompt-scroll="node"]');
+            const renderedScale = Math.max(scale, 0.01);
+            const startWidth = (panelElement?.getBoundingClientRect().width ?? panelWidth * renderedScale) / renderedScale;
+            const startHeight = (textarea?.getBoundingClientRect().height ?? promptInputHeight * renderedScale) / renderedScale;
+            const startX = event.clientX;
+            const startY = event.clientY;
+            const startOffset = panelOffsetXRef.current;
+            const pointerId = event.pointerId;
+            const verticalDirection = panelPlacement === "top" ? -1 : 1;
+            const handleMove = (moveEvent: PointerEvent) => {
+                if (moveEvent.pointerId !== pointerId) return;
+                moveEvent.preventDefault();
+                resizePromptPanelBy(startWidth, startHeight, (moveEvent.clientX - startX) / renderedScale, ((moveEvent.clientY - startY) / renderedScale) * verticalDirection, startOffset);
+            };
+            const cleanup = () => {
+                window.removeEventListener("pointermove", handleMove);
+                window.removeEventListener("pointerup", cleanup);
+                window.removeEventListener("pointercancel", cleanup);
+                if (panelResizeCleanupRef.current === cleanup) panelResizeCleanupRef.current = null;
+            };
+            panelResizeCleanupRef.current = cleanup;
+            window.addEventListener("pointermove", handleMove);
+            window.addEventListener("pointerup", cleanup);
+            window.addEventListener("pointercancel", cleanup);
+        },
+        [panelPlacement, panelWidth, promptInputHeight, resizePromptPanelBy, scale],
+    );
+
+    const handlePanelResizeBy = useCallback(
+        (deltaWidth: number, deltaHeight: number) => {
+            const panelElement = panelRef.current;
+            const textarea = panelElement?.querySelector<HTMLTextAreaElement>('[data-canvas-prompt-scroll="node"]');
+            const renderedScale = Math.max(scale, 0.01);
+            const currentWidth = (panelElement?.getBoundingClientRect().width ?? panelWidth * renderedScale) / renderedScale;
+            const currentHeight = (textarea?.getBoundingClientRect().height ?? promptInputHeight * renderedScale) / renderedScale;
+            resizePromptPanelBy(currentWidth, currentHeight, deltaWidth, deltaHeight);
+        },
+        [panelWidth, promptInputHeight, resizePromptPanelBy, scale],
+    );
 
     useLayoutEffect(() => {
         if (!showPanel || !panelRef.current) return;
@@ -389,6 +467,8 @@ export const CanvasNode = React.memo(function CanvasNode({
             window.removeEventListener("mouseup", handleResizeUp);
         };
     }, [handleResizeMove, handleResizeUp]);
+
+    useEffect(() => () => panelResizeCleanupRef.current?.(), []);
 
     return (
         <div
@@ -492,10 +572,18 @@ export const CanvasNode = React.memo(function CanvasNode({
                     data-canvas-no-drag
                     data-canvas-node-panel
                     data-canvas-node-panel-placement={panelPlacement}
-                    className={`absolute left-1/2 z-[70] w-[500px] max-w-[calc(100vw-2rem)] -translate-x-1/2 overflow-y-auto ${panelPlacement === "top" ? "bottom-full pb-4" : "top-full pt-4"}`}
-                    style={{ marginLeft: panelOffsetX, maxHeight: panelMaxHeight ? `${panelMaxHeight}px` : "calc(100dvh - 1rem)", maxWidth: panelMaxWidth }}
+                    className={`absolute left-1/2 z-[70] -translate-x-1/2 overflow-y-auto ${panelPlacement === "top" ? "bottom-full pb-4" : "top-full pt-4"}`}
+                    style={
+                        {
+                            width: panelWidth,
+                            marginLeft: panelOffsetX,
+                            maxHeight: panelMaxHeight ? `${panelMaxHeight}px` : "calc(100dvh - 1rem)",
+                            maxWidth: panelMaxWidth ?? "calc(100vw - 2rem)",
+                            "--canvas-prompt-input-height": `${promptInputHeight}px`,
+                        } as React.CSSProperties
+                    }
                 >
-                    {renderPanel(data)}
+                    {renderPanel(data, { onResizeStart: handlePanelResizeStart, onResizeBy: handlePanelResizeBy })}
                 </div>
             ) : null}
         </div>

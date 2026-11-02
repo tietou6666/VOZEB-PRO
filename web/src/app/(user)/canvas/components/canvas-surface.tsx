@@ -5,7 +5,7 @@ import type { CSSProperties, DragEvent as ReactDragEvent, MouseEvent as ReactMou
 
 import { canvasThemes, type CanvasBackgroundMode, type CanvasTheme } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { CanvasNode, type CanvasNodeProps } from "./canvas-node";
+import { CanvasNode, type CanvasNodePanelResizeHandlers, type CanvasNodeProps } from "./canvas-node";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type Position, type ViewportTransform } from "../types";
 import { edgePath, expandCanvasDragNodeIds, findConnectionTarget, isBlockedConnectionDrop, isCanvasVideoControlPoint, nodeAnchor, previewPath, samePosition, selectNodesInBounds, worldFromScreen } from "../utils/canvas-surface-geometry";
 import { buildCanvasSpatialIndex, canvasNodeBounds, canvasNodesBounds, type CanvasBounds } from "../utils/canvas-spatial-index";
@@ -39,7 +39,7 @@ type CanvasSurfaceProps = {
     relatedNodeIds: Set<string>;
     relatedConnectionIds: Set<string>;
     renderNode: (node: CanvasNodeData) => ReactNode;
-    renderPanel?: (node: CanvasNodeData) => ReactNode;
+    renderPanel?: (node: CanvasNodeData, resize: CanvasNodePanelResizeHandlers) => ReactNode;
     nodeProps: Omit<
         CanvasNodeProps,
         | "data"

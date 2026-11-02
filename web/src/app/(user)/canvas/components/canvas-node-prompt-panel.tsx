@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type SyntheticEvent } from "react";
-import { LoaderCircle, Maximize2, Minimize2, Square } from "lucide-react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type SyntheticEvent } from "react";
+import { LoaderCircle, Maximize2, Minimize2, MoveDiagonal2, Square } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -32,11 +32,13 @@ type CanvasNodePromptPanelProps = {
     onConfigChange: (nodeId: string, patch: Partial<CanvasNodeData["metadata"]>) => void;
     onGenerate: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => void;
     onStop: (nodeId: string) => void;
+    onPanelResizeStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+    onPanelResizeBy: (deltaWidth: number, deltaHeight: number) => void;
     mentionReferences?: CanvasResourceReference[];
     onImageSettingsOpenChange?: (open: boolean) => void;
 };
 
-export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, onStop, mentionReferences = [], onImageSettingsOpenChange }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, onStop, onPanelResizeStart, onPanelResizeBy, mentionReferences = [], onImageSettingsOpenChange }: CanvasNodePromptPanelProps) {
     const globalConfig = useEffectiveConfig();
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -99,7 +101,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                     onSubmit={submit}
                     aria-label="节点提示词"
                     data-canvas-prompt-scroll="node"
-                    className="thin-scrollbar h-24 w-full resize-none overflow-y-auto overscroll-contain rounded-xl border px-3 py-2 pr-11 text-sm leading-5 outline-none"
+                    className="thin-scrollbar h-[var(--canvas-prompt-input-height,6rem)] w-full resize-none overflow-y-auto overscroll-contain rounded-xl border px-3 py-2 pb-8 pr-11 text-sm leading-5 outline-none"
                     style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
                     placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent, isPanorama)}
                 />
@@ -118,6 +120,28 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                         aria-label="放大提示词输入"
                     >
                         <Maximize2 className="size-4" aria-hidden />
+                    </button>
+                </Tooltip>
+                <Tooltip title="拖动调整输入框大小" placement="top">
+                    <button
+                        type="button"
+                        data-canvas-no-drag
+                        data-canvas-prompt-resize-handle
+                        className="absolute bottom-1 right-1 z-10 grid size-7 cursor-nwse-resize touch-none place-items-center rounded-lg border transition-opacity hover:opacity-75 focus-visible:outline-none focus-visible:ring-2"
+                        style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item }}
+                        aria-label="调整提示词输入框大小"
+                        onPointerDown={onPanelResizeStart}
+                        onKeyDown={(event) => {
+                            if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+                            event.preventDefault();
+                            const step = event.shiftKey ? 48 : 16;
+                            onPanelResizeBy(event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0, event.key === "ArrowUp" ? step : event.key === "ArrowDown" ? -step : 0);
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                        onMouseDown={stopCanvasInteraction}
+                        onPointerUp={stopCanvasInteraction}
+                    >
+                        <MoveDiagonal2 className="size-4" aria-hidden />
                     </button>
                 </Tooltip>
             </div>
