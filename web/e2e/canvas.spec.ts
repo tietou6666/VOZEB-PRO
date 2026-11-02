@@ -97,6 +97,8 @@ test("canvas keeps editing, selection, linking and persistence fluid", async ({ 
         await promptDialog.getByRole("button", { name: "收起提示词输入" }).click();
         await expect(promptDialog).toBeHidden();
         await expect(nodePrompt).toHaveValue("弹窗中的长提示词会实时回写原输入框");
+        await surface.press("Escape");
+        await expect(nodePrompt).toBeHidden();
 
         await page.getByRole("button", { name: "切换到框选模式" }).click();
         await expect(surface).toHaveAttribute("data-canvas-interaction-mode", "select");
@@ -152,6 +154,8 @@ test("canvas keeps editing, selection, linking and persistence fluid", async ({ 
         await expect(page.locator("[data-node-id]")).toHaveCount(4);
         await page.waitForTimeout(500);
         await expectCanvasSaved(page);
+        await surface.press("Escape");
+        await expect(page.locator("[data-canvas-node-panel]")).toHaveCount(0);
 
         patchRequests.length = 0;
         const beforeDrag = await sourceNode.boundingBox();
