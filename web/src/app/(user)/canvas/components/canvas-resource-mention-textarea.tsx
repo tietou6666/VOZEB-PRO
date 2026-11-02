@@ -105,7 +105,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const mergedStyle = {
         ...(style || {}),
         color: showOverlay ? "transparent" : style?.color,
-        caretColor: style?.color || theme.node.text,
+        caretColor: theme.node.text,
         ...(showOverlay ? { background: "transparent", backgroundColor: "transparent" } : {}),
     } as CSSProperties;
     const menu = mention && candidates.length && textareaRef.current ? <MentionMenu textarea={textareaRef.current} references={candidates} activeIndex={Math.min(activeIndex, candidates.length - 1)} theme={theme} onSelect={insertReference} /> : null;
@@ -113,8 +113,8 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     return (
         <div className={`relative h-full w-full ${containerClassName || ""}`}>
             {showOverlay ? (
-                <div ref={overlayRef} className={`${className || ""} pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words`} style={{ ...style, color: theme.node.text }}>
-                    <MentionHighlightText value={value || props.placeholder?.toString() || ""} labels={activeLabels} references={references} placeholder={!value} />
+                <div ref={overlayRef} className={`${className || ""} pointer-events-none absolute inset-0 z-0 overflow-hidden whitespace-pre-wrap break-words`} style={{ ...style, color: theme.node.text }}>
+                    <MentionHighlightText value={value || props.placeholder?.toString() || ""} labels={activeLabels} references={references} placeholder={!value} inline />
                 </div>
             ) : null}
             <textarea
@@ -126,7 +126,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                     else if (forwardedRef) forwardedRef.current = node;
                 }}
                 value={value}
-                className={className}
+                className={`${className || ""} relative z-[1]`}
                 style={mergedStyle}
                 onChange={(event) => {
                     const next = event.target.value;
@@ -182,15 +182,25 @@ export function CanvasResourceMentionText({ value, references }: { value: string
     return <MentionHighlightText value={value} labels={labels} references={references} placeholder={!value} />;
 }
 
-function MentionHighlightText({ value, labels, references, placeholder }: { value: string; labels: string[]; references: CanvasResourceReference[]; placeholder: boolean }) {
+function MentionHighlightText({ value, labels, references, placeholder, inline = false }: { value: string; labels: string[]; references: CanvasResourceReference[]; placeholder: boolean; inline?: boolean }) {
     if (placeholder) return <span className="opacity-45">{value}</span>;
     if (!labels.length) return <>{value}</>;
     const pattern = new RegExp(`(${labels.map(escapeRegExp).join("|")})`, "g");
     const referencesByLabel = new Map(references.filter((reference) => reference.active).map((reference) => [reference.label, reference]));
-    return <>{value.split(pattern).map((part, index) => (referencesByLabel.has(part) ? <ReferenceToken key={`${part}-${index}`} reference={referencesByLabel.get(part)!} /> : <span key={`${part}-${index}`}>{part}</span>))}</>;
+    return <>{value.split(pattern).map((part, index) => (referencesByLabel.has(part) ? <ReferenceToken key={`${part}-${index}`} reference={referencesByLabel.get(part)!} inline={inline} /> : <span key={`${part}-${index}`}>{part}</span>))}</>;
 }
 
-function ReferenceToken({ reference }: { reference: CanvasResourceReference }) {
+function ReferenceToken({ reference, inline = false }: { reference: CanvasResourceReference; inline?: boolean }) {
+    if (inline) {
+        return (
+            <span data-canvas-resource-reference={reference.nodeId} title={reference.title} className="relative inline-block max-w-full align-baseline font-medium text-transparent">
+                <span className="whitespace-pre">{reference.label}</span>
+                <span className="absolute inset-0 inline-flex min-w-0 items-center justify-center overflow-hidden rounded-[3px] bg-[#2f80ff]/12 text-[#2f80ff] ring-1 ring-[#2f80ff]/24">
+                    <span className="min-w-0 truncate">{reference.label}</span>
+                </span>
+            </span>
+        );
+    }
     const preview =
         reference.kind === "image" && reference.previewUrl ? (
             <img src={imagePreviewUrl(reference.previewUrl, 64)} alt="" className="size-[1.2em] shrink-0 rounded-sm object-cover" />
