@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 
-import { expect, test, type APIRequestContext, type Page, type Response } from "@playwright/test";
+import { expect, test, type APIRequestContext, type BrowserContext, type Page, type Response } from "@playwright/test";
 
 import { ADMIN_SECTION_KEYS } from "../src/components/admin/admin-sections";
 import { expectNoHorizontalOverflow, expectVisibleControlsWithinViewport } from "./responsive-helpers";
@@ -17,6 +18,10 @@ const FILE_PROVIDER_LIMITATIONS = new Map([
 
 type RouteCase = { path: string; expectedPath?: RegExp; expectedStatus?: number; readyHeading?: string; readyText?: string };
 type ApiFailure = { path: string; status: number; body: string };
+
+test.beforeEach(async ({ context }) => {
+    await useLocalReleaseMetadata(context);
+});
 
 test("all authenticated pages reach their real routes and stay usable", async ({ page, request }, testInfo) => {
     test.setTimeout(360_000);
@@ -75,6 +80,7 @@ test("every administrator section renders its server-backed surface", async ({ p
 test("signed-out, legal, installation and invalid public detail routes fail safely", async ({ browser }, testInfo) => {
     test.setTimeout(180_000);
     const context = await browser.newContext({ baseURL: BASE_URL, viewport: testInfo.project.use.viewport || undefined, storageState: { cookies: [], origins: [] } });
+    await useLocalReleaseMetadata(context);
     const page = await context.newPage();
     try {
         const theme = testInfo.project.name === "mobile-430" ? "dark" : "light";
@@ -97,6 +103,14 @@ test("signed-out, legal, installation and invalid public detail routes fail safe
         await context.close();
     }
 });
+
+async function useLocalReleaseMetadata(context: BrowserContext) {
+    for (const file of ["VERSION", "CHANGELOG.md"]) {
+        await context.route(`https://raw.githubusercontent.com/csyqlz/VOZEB-PRO/main/${file}`, (route) =>
+            route.fulfill({ path: path.join(process.cwd(), "..", file), contentType: "text/plain; charset=utf-8", headers: { "access-control-allow-origin": "*" } }),
+        );
+    }
+}
 
 async function createPageFixtures(request: APIRequestContext, viewportWidth: number) {
     const suffix = randomUUID().slice(0, 8);

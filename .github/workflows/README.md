@@ -21,5 +21,3 @@ Fork 后先启用仓库 Actions，将本地补丁提交到自己的仓库，再�
 主应用质量与发布检查先执行 `pnpm audit --prod --audit-level moderate`，再执行 `node scripts/dependency-audit.mjs` 审查完整依赖树；未核准的中危及以上公告阻断发布。脚本保留原始统计，当前主应用生产依赖审计和文档站完整审计为零；主应用完整审计仍有开发工具 `deepmerge@4.3.1` 的低危公告及下述 minimatch 源码误报，不能宣称完整依赖零漏洞。
 
 `GHSA-g3hv-75wg-m249` 的版本范围覆盖全部 `<11.0.1`，但公告描述的 `firstPhasePreProcess` / `secondPhasePreProcess` 和 `optimizationLevel` 不存在于旧版 `minimatch@3.1.5`。现代版本已升级至 `11.0.4`；ESLint 旧插件需要可直接调用的 CommonJS API，保留 `3.1.5`。脚本仅在公告 ID、版本范围、精确版本、ESLint 开发路径全部匹配，且实际加载源码 SHA-256 为 `746849f267c4868a53729225bd85c7dccd387712136fb305fcc0a3eadd4a3d9d` 时接受该误报；其他路径、版本、公告或源码变化均阻断。核对依据为 [GitHub 公告](https://github.com/advisories/GHSA-g3hv-75wg-m249) 与 [npm 官方源码](https://registry.npmjs.org/minimatch/-/minimatch-3.1.5.tgz)。
-
-完整 Web 审计还报告 `deepmerge@4.3.1` 的低危公告，当前无修复版本。审计脚本继续打印原始结果，并只按精确公告、版本、开发依赖路径和 npm 官方源码哈希接受 minimatch 误报；任何未知公告、路径或源码变化仍阻断发布。
