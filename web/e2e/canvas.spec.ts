@@ -4,7 +4,7 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from "@
 import sharp from "sharp";
 
 import { createCanvasProject, deleteCanvasProject, expectCanvasSaved, expectNoHorizontalOverflow, node, readCanvasProject } from "./canvas-e2e-helpers";
-import { E2E_PROTOCOL_ORIGIN } from "./support";
+import { E2E_PROTOCOL_ORIGIN, pollTask } from "./support";
 
 test.describe.configure({ mode: "serial" });
 
@@ -333,6 +333,48 @@ test("canvas node prompt resizes freely within the viewport", async ({ page, req
         await deleteCanvasProject(request, project.id);
     }
 });
+
+for (const scoped of [true, false]) {
+    test(`canvas image retries preserve generated reference scope (${scoped ? "scoped URL" : "bare key"})`, async ({ page, request }) => {
+        const created = await request.post("/api/image-tasks", { data: { kind: "generation", config: { model: "e2e-image", size: "64x64" }, prompt: "reference scope fixture", source: "canvas" } });
+        expect(created.ok(), await created.text()).toBe(true);
+        const completed = await pollTask(request, `/api/image-tasks/${(await created.json()).task.id}`);
+        expect(completed.status).toBe("success");
+        const source = String((completed.result as { dataUrl: string }).dataUrl);
+        expect(source).toMatch(/^\/api\/generation-log-assets\/permanent\//);
+        const savedReference = scoped ? source : source.slice("/api/generation-log-assets/".length);
+        const project = await createCanvasProject(request, {
+            title: `Canvas reference scope ${randomUUID().slice(0, 8)}`,
+            viewport: { x: 80, y: 100, k: 1 },
+            nodes: [
+                node("failed-image", "image", 100, 120, 300, 260, { status: "error", errorDetails: "E2E reference retry", generationType: "edit", references: [savedReference], prompt: "retry with generated reference", model: "e2e-image", size: "64x64" }),
+            ],
+            connections: [],
+        });
+        const submissions: Array<{ references?: Array<{ dataUrl?: string }> }> = [];
+        page.on("request", (current) => {
+            if (current.method() === "POST" && new URL(current.url()).pathname === "/api/image-tasks") submissions.push(current.postDataJSON());
+        });
+        try {
+            await page.setViewportSize({ width: 1280, height: 900 });
+            await page.goto(`/canvas/${project.id}`, { waitUntil: "domcontentloaded" });
+            const failed = page.locator('[data-node-id="failed-image"]');
+            const retryResponse = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/image-tasks" && response.request().method() === "POST");
+            await failed.getByRole("button", { name: "重试", exact: true }).click();
+            await expect.poll(() => submissions.length).toBe(1);
+            expect(submissions[0].references?.[0].dataUrl).toBe(source);
+            const retryTask = (await (await retryResponse).json()).task;
+            expect((await pollTask(request, `/api/image-tasks/${retryTask.id}`)).status).toBe("success");
+            await expect(failed.locator("img")).toBeVisible();
+            await expectCanvasSaved(page);
+            expect((await readCanvasProject(request, `/api/canvas/projects/${project.id}`)).nodes.find((item) => item.id === "failed-image")?.metadata?.status).toBe("success");
+            await page.reload({ waitUntil: "domcontentloaded" });
+            await expect(failed.locator("img")).toBeVisible();
+        } finally {
+            await deleteCanvasProject(request, project.id);
+        }
+    });
+}
 
 test("canvas video first and last frame roles persist and retry from the output snapshot", async ({ page, request }) => {
     test.setTimeout(120_000);

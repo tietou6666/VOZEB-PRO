@@ -2,7 +2,7 @@
 
 import { browserReadableMediaUrl } from "@/lib/browser-media-url";
 import { readImageMeta } from "@/lib/image-utils";
-import { blobToDataUrl, getServerMediaBlob, serverMediaUrl, uploadServerMedia } from "@/services/server-media-storage";
+import { blobToDataUrl, getServerMediaBlob, parseServerMediaUrl, serverMediaUrl, uploadServerMedia } from "@/services/server-media-storage";
 
 export type UploadedImage = {
     url: string;
@@ -26,7 +26,19 @@ export async function resolveImageUrl(storageKey?: string, fallback = "") {
 }
 
 export async function resolveStoredImageDataUrl(storageKey?: string, fallback = "") {
-    return serverMediaUrl(storageKey, fallback);
+    const resolved = serverMediaUrl(storageKey, fallback);
+    const key = (storageKey || "").trim().replace(/\\/g, "/");
+    if (!/^(?:temporary|permanent)\//.test(key) || parseServerMediaUrl(fallback)) return resolved;
+    // Saved bare keys lack their media scope; verify it without downloading or copying the image.
+    for (const url of new Set([resolved, `/api/generation-log-assets/${key.split("/").map(encodeURIComponent).join("/")}`])) {
+        try {
+            const response = await fetch(url, { method: "HEAD", credentials: "same-origin", cache: "no-store" });
+            if (response.ok && response.headers.get("content-type")?.toLowerCase().startsWith("image/")) return url;
+        } catch {
+            // The other scope may still contain this user's image.
+        }
+    }
+    return "";
 }
 
 export function getImageBlob(storageKey: string, fallback = "") {
