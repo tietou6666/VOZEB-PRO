@@ -9,7 +9,11 @@ description: VOZEB PRO 商业部署前的健康检查、调度、备份、监控
 
 ## 当前验收证据边界
 
-- 用户要求撤回的 v0.0.8、v0.0.9、v0.0.10 Git 标签已删除，v0.0.10 主应用发布任务已停止；GitHub Releases 中没有对应条目。本次修复改用 `v0.0.7-fix.1` 并已通过 GitHub Actions。`ghcr.io/tietou6666/vozeb-pro:latest` 为 amd64/arm64 多架构镜像，manifest digest 为 `sha256:100336d1b1e0d7b7cbf5ff2330258c43879a6a7454e5563273aacd937fa4782c`，SBOM 与 Cosign 签名证明已完成。文档镜像 `latest` digest 为 `sha256:e65e7dd0619403651a95d1e90c3b9af84a115b910b18285c67a8b9fea1f08919`。`vozeb-pro-docs` 包里旧 `v0.0.9` 与 `v0.0.10` 镜像 tag 仍存在；当前 GitHub Packages API 凭据没有读取/管理 Packages 的权限，未能删除它们。本次没有修改服务器 Compose 或部署服务，真实运行、静态资源、数据卷恢复及 VOZEB-PRO → New API → Aether 识图仍需部署后验收。
+- `v0.0.8` 发布复用已部署的 Linux/amd64 镜像，Release 附件包含镜像归档、SHA-256 和来源清单；源码版本元数据已提升到 `v0.0.8`，既有镜像内部编译版本仍为 `v0.0.7-fix.2`。该发布不重新编译或触发重复质量门禁，不更新 GHCR `latest`，不增加多架构、SBOM 或签名验收声明。服务器继续运行原镜像，发布附件与服务器镜像的对应关系以来源清单和校验值为准。
+
+- 参考图读取修复已通过 2741 项单测与桌面、390px、430px 共 145 项浏览器回归，并完成类型、Lint、格式、依赖审计和 Windows/Linux 构建；9 项单测与 18 项浏览器测试按既有条件跳过，不作为通过项计数。服务器应用已更新为 `vozeb-pro:reference-reader-20261112`，部署前确认没有正在执行的生成任务，保留原环境、数据卷、Worker、既有 Canvas/Grok 修复及可回滚镜像；健康、数据库和 Worker 就绪检查通过。线上只读诊断调用已部署函数，四条失败记录的全部 12 次参考图引用均读取成功且没有媒体 HTTP 请求，原任务未改写或重提。该证据不包含真实付费上游生成、真实 S3 及完整灾备恢复，不能据此宣称全部商业上线事项完成。
+
+- 此前按用户要求撤回了 v0.0.8、v0.0.9、v0.0.10 Git 标签，停止 v0.0.10 主应用发布任务，当时 GitHub Releases 中没有对应条目；本轮按用户要求重新使用 `v0.0.8` 发布参考图读取修复，v0.0.9、v0.0.10 保持撤回。此前 `v0.0.7-fix.1` 已通过 GitHub Actions。`ghcr.io/tietou6666/vozeb-pro:latest` 为 amd64/arm64 多架构镜像，manifest digest 为 `sha256:100336d1b1e0d7b7cbf5ff2330258c43879a6a7454e5563273aacd937fa4782c`，SBOM 与 Cosign 签名证明已完成。文档镜像 `latest` digest 为 `sha256:e65e7dd0619403651a95d1e90c3b9af84a115b910b18285c67a8b9fea1f08919`。`vozeb-pro-docs` 包里旧 `v0.0.9` 与 `v0.0.10` 镜像 tag 仍存在；当前 GitHub Packages API 凭据没有读取/管理 Packages 的权限，未能删除它们。该次 GitHub 发布没有修改服务器 Compose 或部署服务；本轮部署与静态资源证据见参考图修复条目，完整数据卷恢复及 VOZEB-PRO → New API → Aether 真实识图仍需独立验收。
 
 - v0.0.7-fix.1 GitHub 全量门禁已通过：单测 `549` 个文件、`2701` 项通过，`4` 个 PostgreSQL 文件、`9` 项通过；Playwright `143` 项通过、`17` 项按既有契约跳过；依赖审计、ESLint、TypeScript、格式检查、生产构建、Secret Scan 与 CodeQL 均通过。主应用和文档站的 amd64/arm64 镜像、SPDX SBOM、Cosign 签名及 attestation 均成功。
 - 历史回归证据：此前远端专用 PostgreSQL 的 Playwright 桌面、390px、430px 矩阵 `143` 项通过、`17` 项按既有契约跳过；本地文件 Provider 矩阵经失败复核与相关 `9` 项复测后合计 `142` 项通过、`18` 项跳过。此前 Agent 大图专项三端确认规划和文本执行均收到完整图片字节且刷新可恢复，协议请求仅使用本地 TCP fixture。这些历史结果不替代当前发布提交的完整质量门禁或部署后真实上游验收。

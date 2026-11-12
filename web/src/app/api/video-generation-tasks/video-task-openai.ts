@@ -4,6 +4,7 @@ type OpenAiVideoFormInput = {
     model: string;
     prompt: string;
     seconds: number;
+    resolution?: string;
     width?: number;
     height?: number;
     imageUrls: string[];
@@ -17,6 +18,7 @@ export async function buildOpenAiVideoFormData(input: OpenAiVideoFormInput) {
     formData.set("model", input.model);
     formData.set("prompt", input.prompt);
     formData.set("seconds", String(input.seconds));
+    if (input.resolution && /^(?:grok-imagine-video-1\.5-preview|grok-imagine-video-1\.5)$/.test(input.model)) formData.set("resolution", input.resolution);
     if (input.width && input.height) formData.set("size", `${input.width}x${input.height}`);
     if (input.imageUrls[0]) {
         const file = await imageReferenceToFile({ dataUrl: input.imageUrls[0], url: input.imageUrls[0] }, "input-reference.png", input.origin, input.cookie);

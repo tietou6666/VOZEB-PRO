@@ -28,6 +28,7 @@ import { systemAiBillingHeaders } from "@/lib/server/system-ai-billing";
 import { maintenanceWorkerContextHeaders } from "@/lib/server/maintenance-auth";
 import { fetchSafeOutbound } from "@/lib/server/safe-outbound-fetch";
 import { resolveMediaMimeType } from "@/lib/server/media-content-type";
+import { imageReferenceHttpError, readManagedImageReference, type ImageReferenceReadContext } from "@/lib/server/image-reference-reader";
 import { GenerationSubmissionSafeFailure, GenerationSubmissionUncertainError, generationSubmissionResponseError, generationSubmissionUncertainError } from "@/lib/server/generation-submission-error";
 
 import {
@@ -707,15 +708,25 @@ export async function buildImageEditFormData(task: ImageTask, quality: string | 
     if (quality) formData.set("quality", quality);
     if (requestSize) formData.set("size", requestSize);
     if (task.config.outputBackground === "transparent") formData.set("background", "transparent");
-    const referenceFiles = await Promise.all(task.references.map((reference, index) => imageReferenceToFile(reference, reference.name || `reference-${index + 1}.png`, origin, cookie)));
+    const context = { ownerUserId: task.userId, taskId: task.id };
+    const referenceFiles = await Promise.all(task.references.map((reference, index) => imageReferenceToFile(reference, reference.name || `reference-${index + 1}.png`, origin, cookie, context)));
     referenceFiles.forEach((file) => formData.append("image", file));
-    if (task.mask) formData.set("mask", await imageReferenceToFile(task.mask, task.mask.name || "mask.png", origin, cookie));
+    if (task.mask) formData.set("mask", await imageReferenceToFile(task.mask, task.mask.name || "mask.png", origin, cookie, context));
     return formData;
 }
 
-export async function imageReferenceToFile(reference: ImageTaskReference, name: string, origin: string, cookie: string) {
+export async function imageReferenceToFile(reference: ImageTaskReference, name: string, origin: string, cookie: string, context?: ImageReferenceReadContext) {
+    const candidates = rawReferenceRequestUrlCandidates(reference);
+    for (const value of context ? candidates : []) {
+        if (/^(?:data|blob):/i.test(value)) continue;
+        const managed = await readManagedImageReference(value, origin, context, MAX_INLINE_IMAGE_BYTES, INLINE_IMAGE_TIMEOUT_MS);
+        if (!managed) continue;
+        const mimeType = await resolveMediaMimeType(managed.bytes, "image", managed.mimeType);
+        if (!mimeType) throw new Error("参考图不是有效图片");
+        return new File([new Uint8Array(managed.bytes)], name, { type: mimeType });
+    }
     let lastError: unknown;
-    for (const value of rawReferenceRequestUrlCandidates(reference)) {
+    for (const value of candidates) {
         try {
             if (/^data:image\//i.test(value)) return dataUrlToFile(value, name, reference.type);
             if (/^blob:/i.test(value)) throw new Error("参考图已失效，请重新上传");
@@ -727,7 +738,12 @@ export async function imageReferenceToFile(reference: ImageTaskReference, name: 
                 cache: "no-store",
                 signal: AbortSignal.timeout(INLINE_IMAGE_TIMEOUT_MS),
             });
-            if (!response.ok || !response.body) throw new Error("参考图读取失败");
+            if (!response.ok) {
+                await response.body?.cancel();
+                console.error("Image reference HTTP read failed", { taskId: context?.taskId, status: response.status, source: value.startsWith("/") ? "internal" : "external" });
+                throw imageReferenceHttpError(response.status);
+            }
+            if (!response.body) throw new Error("参考图读取失败：响应内容为空");
             const contentLength = Number(response.headers.get("content-length") || 0);
             if (contentLength > MAX_INLINE_IMAGE_BYTES) throw new Error("参考图过大，请压缩后重试");
             const bytes = Buffer.from(await response.arrayBuffer());
@@ -743,10 +759,10 @@ export async function imageReferenceToFile(reference: ImageTaskReference, name: 
     throw lastError instanceof Error ? lastError : new Error("参考图读取失败");
 }
 
-export async function imageReferenceToDataUrl(reference: ImageTaskReference, name: string, origin: string, cookie: string) {
+export async function imageReferenceToDataUrl(reference: ImageTaskReference, name: string, origin: string, cookie: string, context?: ImageReferenceReadContext) {
     const inline = rawReferenceRequestUrlCandidates(reference).find((value) => /^data:image\//i.test(value));
-    if (inline) return inline;
-    const file = await imageReferenceToFile(reference, name, origin, cookie);
+    if (inline && !context) return inline;
+    const file = await imageReferenceToFile(reference, name, origin, cookie, context);
     return `data:${file.type || reference.type || "image/png"};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`;
 }
 

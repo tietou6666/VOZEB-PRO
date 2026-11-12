@@ -30,7 +30,7 @@ export async function prepareImageTaskResults(task: ImageTask, result: ImageTask
     if (preserveLayers) {
         if (task.kind !== "edit" || task.references.length !== 1) throw new Error("上游分层验收失败：电商分层需要且只能使用一张源图，请为该模型配置真实分层接口");
         try {
-            const source = await imageReferenceToDataUrl(task.references[0], task.references[0].name || "source.png", origin, authContext);
+            const source = await imageReferenceToDataUrl(task.references[0], task.references[0].name || "source.png", origin, authContext, { ownerUserId: task.userId, taskId: task.id });
             const validated = await validateImageLayerOutputs(
                 source,
                 safeResults.map((item) => item.dataUrl),
