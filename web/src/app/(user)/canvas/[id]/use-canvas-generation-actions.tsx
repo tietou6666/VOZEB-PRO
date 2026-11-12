@@ -115,7 +115,7 @@ export function useCanvasGenerationActions({ state, tasks, interactions }: { sta
             const editingTextNode = mode === "text" && Boolean(sourceTextContent);
             const rawGenerationContext = buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : prompt);
             let generationContext = rawGenerationContext;
-            if (mode === "image" || mode === "text") {
+            if (mode === "image") {
                 try {
                     generationContext = await hydrateNodeGenerationContext(rawGenerationContext);
                 } catch (error) {
@@ -640,7 +640,7 @@ export function useCanvasGenerationActions({ state, tasks, interactions }: { sta
                   ? sourceNode.metadata.composerContent
                   : sourceNode.metadata?.prompt || node.metadata?.prompt || "";
             const rawContext = hasSavedImageMetadata ? null : buildNodeGenerationContext(sourceNode.id, nodesRef.current, connectionsRef.current, retryPromptSource);
-            const context = rawContext && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio ? await hydrateNodeGenerationContext(rawContext) : rawContext;
+            const context = rawContext && node.type !== CanvasNodeType.Text && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio ? await hydrateNodeGenerationContext(rawContext) : rawContext;
             const sourcePrompt = (savedImageMetadata?.sourcePrompt || sourceNode.metadata?.sourcePrompt || context?.prompt || savedImageMetadata?.prompt || sourceNode.metadata?.prompt || node.metadata?.prompt || "").trim();
             const panoramaPrompt = node.type === CanvasNodeType.Panorama ? buildPanoramaPrompt(sourcePrompt, Boolean(savedImageMetadata?.references?.length || context?.referenceImages.length)) : sourcePrompt;
             const prompt = applyCameraPrompt(panoramaPrompt, node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Panorama ? undefined : savedImageMetadata?.cameraControl || sourceNode.metadata?.cameraControl);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../types";
-import { buildNodeGenerationContext } from "./canvas-node-generation";
+import { buildNodeGenerationContext, buildNodeResponseMessages } from "./canvas-node-generation";
 
 describe("buildNodeGenerationContext", () => {
     it("uses every connected input when the composer has no explicit node mention", () => {
@@ -21,6 +21,51 @@ describe("buildNodeGenerationContext", () => {
         expect(context.referenceImages.map((item) => item.id)).toEqual(["image"]);
         expect(context.referenceVideos).toEqual([]);
         expect(context).toMatchObject({ textCount: 0, imageCount: 1, videoCount: 0, audioCount: 0 });
+    });
+});
+
+describe("buildNodeResponseMessages", () => {
+    it("submits stored image URLs in order without embedding large inline copies", () => {
+        const firstUrl = "/api/generation-log-assets/permanent/first.png";
+        const secondUrl = "/api/reference-assets/permanent/second.png";
+        const inputs = [
+            node("first", CanvasNodeType.Image, { content: "data:image/png;base64," + "A".repeat(4 * 1024 * 1024), serverUrl: firstUrl }),
+            node("second", CanvasNodeType.Image, { content: secondUrl }),
+            node("config", CanvasNodeType.Config, {}),
+        ];
+        const context = buildNodeGenerationContext(
+            "config",
+            inputs,
+            [
+                { id: "first-config", fromNodeId: "first", toNodeId: "config" },
+                { id: "second-config", fromNodeId: "second", toNodeId: "config" },
+            ],
+            "反推提示词",
+        );
+        const messages = buildNodeResponseMessages(context);
+
+        expect(messages).toEqual([
+            {
+                role: "user",
+                content: [
+                    { type: "text", text: "反推提示词" },
+                    { type: "image_url", image_url: { url: firstUrl } },
+                    { type: "image_url", image_url: { url: secondUrl } },
+                ],
+            },
+        ]);
+        expect(new TextEncoder().encode(JSON.stringify({ config: { model: "text-model" }, messages })).byteLength).toBeLessThan(4 * 1024 * 1024);
+        expect(context.referenceImages[0].dataUrl).toMatch(/^data:image\/png;base64,/);
+    });
+
+    it("keeps an inline image when no stored URL exists", () => {
+        const context = buildNodeGenerationContext("config", nodes(), connections(), "识图");
+        expect(buildNodeResponseMessages(context)[0].content).toContainEqual({ type: "image_url", image_url: { url: "data:image/png;base64,image" } });
+    });
+
+    it("keeps text-only messages unchanged", () => {
+        const context = buildNodeGenerationContext("config", [], [], "你好");
+        expect(buildNodeResponseMessages(context)).toEqual([{ role: "user", content: "你好" }]);
     });
 });
 

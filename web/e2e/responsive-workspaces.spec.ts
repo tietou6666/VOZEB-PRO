@@ -1,8 +1,75 @@
 import { randomUUID } from "node:crypto";
 
 import { expect, test, type APIRequestContext, type Locator } from "@playwright/test";
+import sharp from "sharp";
 
+import { createCanvasProject, deleteCanvasProject, expectCanvasSaved, node, readCanvasProject } from "./canvas-e2e-helpers";
 import { billingProductsFixture, expectDialogWithinViewport, expectNoHorizontalOverflow, masonryGalleryFixture, masonryLayoutIsReady, openCreativeHistory, readMasonryLayout } from "./responsive-helpers";
+import { pollTask, protocolFixtureState, resetProtocolFixture } from "./support";
+
+test("canvas text references stay small for creation and retry while the server reads the original image", async ({ page, request }) => {
+    await resetProtocolFixture(request);
+    const image = await sharp({ create: { width: 1280, height: 1024, channels: 3, background: "#3787be" } })
+        .png({ compressionLevel: 0 })
+        .toBuffer();
+    expect((image.length * 4) / 3).toBeGreaterThan(4 * 1024 * 1024);
+    for (const retry of [false, true]) {
+        const upload = await request.post("/api/reference-assets", {
+            data: { type: "image", persistent: false, dataUrl: `data:image/png;base64,${image.toString("base64")}`, originalName: "canvas-text-reference.png" },
+        });
+        expect(upload.ok(), await upload.text()).toBe(true);
+        const asset = (await upload.json()) as { key: string; url: string; mimeType: string };
+        const project = await createCanvasProject(request, {
+            title: `Canvas 文本大图 ${retry ? "重试" : "新建"}`,
+            viewport: { x: 0, y: 0, k: 1 },
+            nodes: [
+                node("reference", "image", -400, 140, 260, 208, { content: asset.url, serverUrl: asset.url, storageKey: asset.key, mimeType: asset.mimeType, naturalWidth: 1280, naturalHeight: 1024 }),
+                node("config", "config", 30, 140, 300, 180, { generationMode: "text", model: "e2e-text", count: 1, composerContent: "读取参考图片并反推提示词 @[node:reference]" }),
+                ...(retry ? [node("failed-text", "text", 30, 400, 300, 180, { status: "error", errorDetails: "请求体过大", prompt: "读取参考图片并反推提示词" })] : []),
+            ],
+            connections: [{ id: "reference-config", fromNodeId: "reference", toNodeId: "config" }, ...(retry ? [{ id: "config-output", fromNodeId: "config", toNodeId: "failed-text" }] : [])],
+        });
+        try {
+            await page.goto(`/canvas/${project.id}`, { waitUntil: "domcontentloaded" });
+            const trigger = retry ? page.locator('[data-node-id="failed-text"]').getByRole("button", { name: "重试", exact: true }) : page.locator('[data-node-id="config"]').getByRole("button", { name: /开始生成$/ });
+            await expect(trigger).toBeVisible();
+            const responsePromise = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/text-tasks");
+            await trigger.click();
+            const response = await responsePromise;
+            expect(response.ok(), await response.text()).toBe(true);
+            const submission = response.request();
+            expect(submission.postDataBuffer()!.byteLength).toBeLessThan(4 * 1024 * 1024);
+            expect(submission.postDataJSON().messages).toEqual([
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: expect.stringContaining("反推提示词") },
+                        { type: "image_url", image_url: { url: asset.url } },
+                    ],
+                },
+            ]);
+            const task = ((await response.json()) as { task: { id: string } }).task;
+            expect((await pollTask(request, `/api/text-tasks/${task.id}`)).status).toBe("success");
+            const projectPath = `/api/canvas/projects/${project.id}`;
+            await expect.poll(async () => (await readCanvasProject(request, projectPath)).nodes.filter((item) => item.type === "text" && item.metadata?.status === "success").length).toBe(1);
+            await expectCanvasSaved(page);
+            await page.reload({ waitUntil: "domcontentloaded" });
+            const saved = await readCanvasProject(request, projectPath);
+            const output = saved.nodes.filter((item) => item.type === "text");
+            expect(output).toHaveLength(1);
+            expect(output[0].metadata?.content).toContain("协议测试识图成功");
+            if (retry) expect(output[0].id).toBe("failed-text");
+            await expectNoHorizontalOverflow(page, "Canvas 文本参考图");
+        } finally {
+            await page.goto("/canvas", { waitUntil: "domcontentloaded" });
+            await deleteCanvasProject(request, project.id);
+        }
+    }
+    const state = await protocolFixtureState(request);
+    const textCalls = state.requests.filter((item) => item.method === "POST" && item.path.endsWith("/chat/completions"));
+    expect(textCalls).toHaveLength(2);
+    expect(textCalls).toEqual([expect.objectContaining({ imageInputCount: 1, inlineImageBytes: image.length }), expect.objectContaining({ imageInputCount: 1, inlineImageBytes: image.length })]);
+});
 
 test("creative workspaces remain usable without horizontal overflow in light and dark themes", async ({ page, request }) => {
     const created = await request.post("/api/drama/projects", { data: { title: "E2E 短剧项目", ratio: "9:16" } });

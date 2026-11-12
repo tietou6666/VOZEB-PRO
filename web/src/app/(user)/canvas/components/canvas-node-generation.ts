@@ -129,7 +129,7 @@ export function buildNodeResponseMessages(context: NodeGenerationContext): AiTex
     return [
         {
             role: "user",
-            content: [{ type: "text" as const, text: context.prompt }, ...context.referenceImages.map((image) => ({ type: "image_url" as const, image_url: { url: image.dataUrl } }))],
+            content: [{ type: "text" as const, text: context.prompt }, ...context.referenceImages.map((image) => ({ type: "image_url" as const, image_url: { url: image.url || image.dataUrl } }))],
         },
     ];
 }
