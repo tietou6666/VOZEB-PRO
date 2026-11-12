@@ -46,6 +46,7 @@ const templateVariables = new Set([
     "seconds",
     "image",
     "images",
+    "image_objects",
     "video",
     "videos",
     "audio",

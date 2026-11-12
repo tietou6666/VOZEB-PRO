@@ -72,6 +72,7 @@ async function handleFixtureRequest({ request, response, url, body, tasks, reque
                     bodyBytes: item.body.byteLength,
                     model: requestedModel(item.body, item.contentType),
                     imageInputCount: requestImages(jsonBody(item.body)).length,
+                    imageUrlObjects: jsonBody(item.body)?.images,
                     inlineImageBytes: requestImages(jsonBody(item.body)).reduce((total, image) => total + (image.startsWith("data:") ? Buffer.byteLength(image.split(",", 2)[1], "base64") : 0), 0),
                 })),
             tasks: Array.from(tasks.entries()).map(([id, task]) => ({ id, ...task })),

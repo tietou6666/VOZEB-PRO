@@ -5,7 +5,104 @@ import sharp from "sharp";
 
 import { createCanvasProject, deleteCanvasProject, expectCanvasSaved, node, readCanvasProject } from "./canvas-e2e-helpers";
 import { billingProductsFixture, expectDialogWithinViewport, expectNoHorizontalOverflow, masonryGalleryFixture, masonryLayoutIsReady, openCreativeHistory, readMasonryLayout } from "./responsive-helpers";
-import { pollTask, protocolFixtureState, resetProtocolFixture } from "./support";
+import { e2eSettingsPatch, pollTask, protocolFixtureState, resetProtocolFixture } from "./support";
+
+test("custom image URL objects preserve both managed references during Canvas generation and retry", async ({ page, request }) => {
+    const settings = e2eSettingsPatch();
+    const imageConfig = {
+        capability: "image",
+        source: "manual",
+        protocol: "custom",
+        apiFormat: "openai",
+        createPath: "/custom/images",
+        editPath: "/custom/images",
+        requestTemplate: '{"model":"{{model}}","prompt":"{{prompt}}","images":"{{image_objects}}"}',
+        resultField: "data.image_url",
+        supportsReferenceImage: true,
+    };
+    const systemChannels = settings.systemChannels.map((channel) => ({
+        ...channel,
+        advancedConfig: { ...channel.advancedConfig, modelConfigs: { ...channel.advancedConfig.modelConfigs, "e2e-image": imageConfig }, operationConfigs: { ...channel.advancedConfig.operationConfigs, image: imageConfig } },
+    }));
+    const updated = await request.patch("/api/admin/settings", { data: { systemChannels } });
+    expect(updated.ok(), await updated.text()).toBe(true);
+    try {
+        for (const retry of [false, true]) {
+            const references: Array<{ key: string; url: string; mimeType: string }> = [];
+            for (const background of ["#3787be", "#e9a837"]) {
+                const bytes = await sharp({ create: { width: 64, height: 64, channels: 3, background } })
+                    .png()
+                    .toBuffer();
+                const upload = await request.post("/api/reference-assets", { data: { type: "image", persistent: false, dataUrl: `data:image/png;base64,${bytes.toString("base64")}`, originalName: `reference-${references.length}.png` } });
+                expect(upload.ok(), await upload.text()).toBe(true);
+                references.push(await upload.json());
+            }
+            await resetProtocolFixture(request);
+            const project = await createCanvasProject(request, {
+                title: `Canvas 多参考图 URL ${retry ? "重试" : "新建"}`,
+                viewport: { x: 0, y: 0, k: 1 },
+                nodes: retry
+                    ? [
+                          node("failed-image", "image", 30, 140, 260, 260, {
+                              status: "error",
+                              errorDetails: "E2E reference retry",
+                              generationType: "edit",
+                              references: references.map((reference) => reference.url),
+                              prompt: "combine both reference images",
+                              model: "e2e-image",
+                              size: "64x64",
+                          }),
+                      ]
+                    : [
+                          ...references.map((reference, index) =>
+                              node(`reference-${index}`, "image", -300, 140 + index * 200, 160, 160, { content: reference.url, serverUrl: reference.url, storageKey: reference.key, mimeType: reference.mimeType, naturalWidth: 64, naturalHeight: 64 }),
+                          ),
+                          node("config", "config", 30, 140, 300, 180, { generationMode: "image", model: "e2e-image", count: 1, size: "64x64", composerContent: "combine both reference images @[node:reference-0] @[node:reference-1]" }),
+                      ],
+                connections: retry ? [] : references.map((_, index) => ({ id: `reference-${index}-config`, fromNodeId: `reference-${index}`, toNodeId: "config" })),
+            });
+            try {
+                await page.goto(`/canvas/${project.id}`, { waitUntil: "domcontentloaded" });
+                const trigger = retry ? page.locator('[data-node-id="failed-image"]').getByRole("button", { name: "重试", exact: true }) : page.locator('[data-node-id="config"]').getByRole("button", { name: /开始生成$/ });
+                await expect(trigger).toBeVisible();
+                const responsePromise = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/image-tasks");
+                await trigger.click();
+                const response = await responsePromise;
+                expect(response.ok(), await response.text()).toBe(true);
+                expect(response.request().postDataJSON().references).toHaveLength(2);
+                const task = ((await response.json()) as { task: { id: string } }).task;
+                expect((await pollTask(request, `/api/image-tasks/${task.id}`)).status).toBe("success");
+                const state = await protocolFixtureState(request);
+                const submissions = state.requests.filter((item) => item.method === "POST" && item.path.endsWith("/custom/images"));
+                expect(submissions).toHaveLength(1);
+                expect(submissions[0].contentType).toContain("application/json");
+                expect(submissions[0].inlineImageBytes).toBe(0);
+                expect(submissions[0].imageUrlObjects).toHaveLength(2);
+                for (const [index, reference] of submissions[0].imageUrlObjects!.entries()) {
+                    expect(Object.keys(reference)).toEqual(["image_url"]);
+                    const url = new URL(reference.image_url);
+                    expect(url.pathname).toBe(references[index].url.split("?", 1)[0]);
+                    expect(url.searchParams.get("signature")).toBeTruthy();
+                    expect(url.searchParams.get("expires")).toBeTruthy();
+                    const media = await request.get(url.toString());
+                    expect(media.ok(), await media.text()).toBe(true);
+                    expect(media.headers()["content-type"]).toMatch(/^image\/png/);
+                }
+                const projectPath = `/api/canvas/projects/${project.id}`;
+                await expect.poll(async () => (await readCanvasProject(request, projectPath)).nodes.filter((item) => item.type === "image" && item.metadata?.status === "success").length).toBe(1);
+                await expectCanvasSaved(page);
+                await page.reload({ waitUntil: "domcontentloaded" });
+                await expectNoHorizontalOverflow(page, "Canvas 多参考图 URL");
+            } finally {
+                await page.goto("/canvas", { waitUntil: "domcontentloaded" });
+                await deleteCanvasProject(request, project.id);
+            }
+        }
+    } finally {
+        const restored = await request.patch("/api/admin/settings", { data: { systemChannels: settings.systemChannels } });
+        expect(restored.ok(), await restored.text()).toBe(true);
+    }
+});
 
 test("canvas text references stay small for creation and retry while the server reads the original image", async ({ page, request }) => {
     await resetProtocolFixture(request);

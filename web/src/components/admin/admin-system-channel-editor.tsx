@@ -16,7 +16,8 @@ import { applyModelProtocol, channelProtocolDefinition, channelProtocolOptions, 
 
 const protocolOptions = channelProtocolOptions().map(({ value, label }) => ({ value, label }));
 const ALL_GLOBAL_AIOPC_PRESETS = "__all_globalaiopc_presets__";
-const IMAGE_TEMPLATE_VARIABLE_HELP = "图片动态变量：{{ratio}} / {{aspect_ratio}}、{{size}}、{{resolution}} / {{quality}}、{{width}} / {{height}}、{{n}} / {{count}} / {{num_images}} / {{batch_size}}";
+const IMAGE_TEMPLATE_VARIABLE_HELP =
+    '图片动态变量：{{ratio}} / {{aspect_ratio}}、{{size}}、{{resolution}} / {{quality}}、{{width}} / {{height}}、{{n}} / {{count}} / {{num_images}} / {{batch_size}}。参考图：{{image}} 为首张，{{images}} 为完整字符串数组；需要 [{"image_url":"URL"}] 对象数组时使用 "images":"{{image_objects}}"，不要再包一层数组。';
 const modelCapabilityOptions: Array<{ label: string; value: LogicalModelCapability }> = [
     { label: "文本", value: "text" },
     { label: "图片", value: "image" },

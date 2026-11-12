@@ -122,6 +122,23 @@ describe("active protocols through persisted admin settings and the system proxy
         expectProxyRequests(channel, operation.editPath || operation.createPath, model, true);
     });
 
+    it.each(["image-workbench", "canvas", "drama", "agent"] as const)("preserves every image URL object through persisted settings and the proxy for %s", async (source) => {
+        const definition = IMAGE_PROTOCOLS.find((item) => item.id === "custom");
+        if (!definition) throw new Error("Missing custom image protocol");
+        const model = protocolModel(definition, "image");
+        const operation = { ...protocolOperation(definition, "image", model), requestTemplate: '{"model":"{{model}}","prompt":"{{prompt}}","images":"{{image_objects}}"}' };
+        const channel = await configureProxyChannel(definition, "image", model, protocolAdvancedConfig(definition.id, operation, model));
+        const urls = ["https://cdn.example.com/second.png?x=1&y=2", "https://cdn.example.com/first.png", "https://cdn.example.com/third.png"];
+        const task = { ...imageTask(channel, true), source, references: urls.map((url, index) => ({ id: `reference-${index}`, name: `reference-${index}.png`, type: "image/png", dataUrl: url })) };
+
+        await expectImageResult(await runImage(task, "custom"));
+
+        expectProxyRequests(channel, operation.editPath || operation.createPath, model, true);
+        const submissions = fixture.requests.filter((item) => item.method === "POST");
+        expect(submissions).toHaveLength(1);
+        expect(JSON.parse(submissions[0].body.toString("utf8")).images).toEqual(urls.map((image_url) => ({ image_url })));
+    });
+
     it.each(VIDEO_PROTOCOLS)("routes $id text-to-video and image-to-video creation, polling, and media", async (definition) => {
         const model = protocolModel(definition, "video");
         const operation = protocolOperation(definition, "video", model);

@@ -4,6 +4,21 @@ import { parseDeterministicProtocolDraft, protocolDraftFromUnknown, redactProtoc
 import { safeProtocolDocumentationUrl } from "./channel-protocol-security";
 
 describe("custom channel protocol drafts", () => {
+    it("accepts the full image URL object array template variable", () => {
+        const draft = protocolDraftFromUnknown({
+            baseUrl: "https://api.example.com",
+            authMode: "bearer",
+            operations: [
+                {
+                    capability: "image",
+                    models: ["image-one"],
+                    config: { createPath: "/custom/images", requestTemplate: '{"model":"{{model}}","prompt":"{{prompt}}","images":"{{image_objects}}"}', resultField: "data.image_url", supportsReferenceImage: true },
+                },
+            ],
+        });
+        expect(draft?.operations[0].config.requestTemplate).toContain("{{image_objects}}");
+    });
+
     it("extracts a complete image operation and model catalog from examples", () => {
         const draft = parseDeterministicProtocolDraft({
             text: `GET https://api.example.com/v1/models

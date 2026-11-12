@@ -29,6 +29,13 @@ describe("provider task config", () => {
         expect(buildProviderRequest('{"model":"{{model}}","ratio":"{{ratio}}","resolution":"{{resolution}}"}', {}, { model: "image-v1", ratio: undefined, resolution: undefined })).toEqual({ model: "image-v1" });
     });
 
+    it("renders image URL objects as an ordered array and omits it for text-to-image", () => {
+        const template = '{"model":"{{model}}","images":"{{image_objects}}"}';
+        const image_objects = [{ image_url: "https://cdn.example.com/second.png?x=1&y=2" }, { image_url: "https://cdn.example.com/first.png" }];
+        expect(buildProviderRequest(template, {}, { model: "image-v1", image_objects })).toEqual({ model: "image-v1", images: image_objects });
+        expect(buildProviderRequest(template, {}, { model: "image-v1", image_objects: [] })).toEqual({ model: "image-v1" });
+    });
+
     it("removes empty optional reference placeholders and containers", () => {
         const template = '{"model":"{{model}}","image":"{{image}}","images":"{{images}}","reference_images":["{{image}}"],"referenceVideos":["https://..."],"ref_assets":[{"type":"image","url":"{{image}}"}],"metadata":{"label":""}}';
 

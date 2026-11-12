@@ -62,6 +62,7 @@ export async function runCustomImageTask(task: ImageTask, origin: string, public
         batch_size: outputCount,
         image: images[0] || "",
         images,
+        image_objects: images.map((image_url) => ({ image_url })),
     };
     const payload =
         advanced.protocol === "yumeng"

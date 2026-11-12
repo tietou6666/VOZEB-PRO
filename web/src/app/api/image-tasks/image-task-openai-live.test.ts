@@ -534,6 +534,48 @@ describe("OpenAI image provider over a live compatible fixture", () => {
         }
     });
 
+    it.each([0, 1, 3])("sends %i custom reference URLs as image_url objects without reading the images", async (referenceCount) => {
+        const fixture = createProtocolFixtureServer();
+        await new Promise<void>((resolve) => fixture.server.listen(0, "127.0.0.1", resolve));
+        const address = fixture.server.address();
+        if (!address || typeof address === "string") throw new Error("Protocol fixture did not bind a TCP port");
+        const origin = `http://127.0.0.1:${address.port}`;
+        const urls = ["https://cdn.example.com/second.png?x=1&y=2", "https://cdn.example.com/first.png", "https://cdn.example.com/third.png"].slice(0, referenceCount);
+        const task = liveImageTask(origin, {
+            id: `image-custom-url-objects-${referenceCount}`,
+            kind: referenceCount ? "edit" : "generation",
+            references: urls.map((url, index) => ({ id: `reference-${index}`, name: `reference-${index}.png`, type: "image/png", dataUrl: url })),
+            config: {
+                baseUrl: origin,
+                apiKey: "fixture-key",
+                apiFormat: "openai",
+                model: "fixture-image-model",
+                channelId: "fixture-custom",
+                advancedConfig: {
+                    ...emptyAdvancedConfig(),
+                    protocol: "custom",
+                    createPath: "/custom/images",
+                    editPath: "/custom/images",
+                    referenceRule: "public URL only",
+                    requestTemplate: '{"model":"{{model}}","prompt":"{{prompt}}","images":"{{image_objects}}"}',
+                    resultField: "data.image_url",
+                },
+            },
+        });
+
+        try {
+            await expect(runCustomImageTask(task, "", origin, "", true)).resolves.toMatchObject({ dataUrl: expect.any(String) });
+            expect(fixture.requests).toHaveLength(1);
+            expect(fixture.requests[0]).toMatchObject({ method: "POST", path: "/custom/images", contentType: "application/json" });
+            const body = JSON.parse(fixture.requests[0].body.toString("utf8"));
+            if (referenceCount) expect(body.images).toEqual(urls.map((image_url) => ({ image_url })));
+            else expect(body).not.toHaveProperty("images");
+            expect(fixture.requests[0].body.byteLength).toBeLessThan(1024);
+        } finally {
+            await new Promise<void>((resolve, reject) => fixture.server.close((error?: Error) => (error ? reject(error) : resolve())));
+        }
+    });
+
     it("maps custom relay image ratio, resolution, dimensions and per-task count aliases", async () => {
         const fixture = createProtocolFixtureServer();
         await new Promise<void>((resolve) => fixture.server.listen(0, "127.0.0.1", resolve));
