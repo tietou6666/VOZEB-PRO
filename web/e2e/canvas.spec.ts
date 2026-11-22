@@ -202,6 +202,66 @@ test("canvas keeps editing, selection, linking and persistence fluid", async ({ 
     }
 });
 
+test("canvas keeps independent node prompt drafts across selection and reload", async ({ page, request }) => {
+    const project = await createCanvasProject(request, {
+        title: `Canvas 节点提示词草稿 ${randomUUID().slice(0, 8)}`,
+        viewport: { x: 80, y: 80, k: 1 },
+        nodes: [node("draft-image", "image", 100, 100, 220, 180, { content: "/logo.svg", prompt: "之前的生图提示词" }), node("draft-text", "text", 550, 100, 240, 180, { content: "已有文本", prompt: "之前的文本提示词" })],
+        connections: [],
+    });
+
+    try {
+        await page.goto(`/canvas/${project.id}`, { waitUntil: "domcontentloaded" });
+        await page.getByRole("button", { name: "收起 Agent 面板" }).click();
+        const imageNode = page.locator('[data-node-id="draft-image"]');
+        const textNode = page.locator('[data-node-id="draft-text"]');
+        const editText = page.getByRole("button", { name: "编辑文本", exact: true });
+        const surface = page.locator("[data-canvas-surface]");
+        const imagePrompt = imageNode.getByRole("textbox", { name: "节点提示词" });
+        const textPrompt = textNode.getByRole("textbox", { name: "节点提示词" });
+        const imageDraft = "保留现有构图\n把天空换成晚霞";
+        const textDraft = "改写为更简洁的中文说明";
+
+        await imageNode.click({ position: { x: 40, y: 40 } });
+        await expect(imagePrompt).toHaveValue("");
+        await imagePrompt.fill(imageDraft);
+        await textNode.click({ position: { x: 40, y: 40 } });
+        await editText.click();
+        await expect(textPrompt).toHaveValue("");
+        await textNode.getByRole("button", { name: "放大提示词输入" }).click();
+        const dialog = page.getByRole("dialog", { name: "编辑提示词" });
+        await dialog.getByRole("textbox", { name: "提示词编辑器" }).fill(textDraft);
+        await dialog.getByRole("button", { name: "收起提示词输入" }).click();
+        await expect(dialog).toBeHidden();
+
+        await imageNode.click({ position: { x: 40, y: 40 } });
+        await expect(imagePrompt).toHaveValue(imageDraft);
+        await surface.click({ position: { x: 20, y: 20 } });
+        await expect(page.getByRole("textbox", { name: "节点提示词" })).toHaveCount(0);
+        await textNode.click({ position: { x: 40, y: 40 } });
+        await editText.click();
+        await expect(textPrompt).toHaveValue(textDraft);
+        await expectCanvasSaved(page);
+
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await imageNode.click({ position: { x: 40, y: 40 } });
+        await expect(imagePrompt).toHaveValue(imageDraft);
+        await imagePrompt.clear();
+        await textNode.click({ position: { x: 40, y: 40 } });
+        await editText.click();
+        await expect(textPrompt).toHaveValue(textDraft);
+        await imageNode.click({ position: { x: 40, y: 40 } });
+        await expect(imagePrompt).toHaveValue("");
+        await expectCanvasSaved(page);
+
+        const savedProject = await readCanvasProject(request, `/api/canvas/projects/${project.id}`);
+        expect(savedProject.nodes.find((item) => item.id === "draft-image")?.metadata).toMatchObject({ prompt: "之前的生图提示词", promptDraft: "" });
+        expect(savedProject.nodes.find((item) => item.id === "draft-text")?.metadata).toMatchObject({ prompt: "之前的文本提示词", promptDraft: textDraft });
+    } finally {
+        await deleteCanvasProject(request, project.id);
+    }
+});
+
 test("canvas node prompt keeps image and video mentions after long text", async ({ page, request }) => {
     await page.addInitScript(() => localStorage.setItem("vozeb-pro:theme_store", JSON.stringify({ state: { theme: "light" }, version: 0 })));
     const project = await createCanvasProject(request, {

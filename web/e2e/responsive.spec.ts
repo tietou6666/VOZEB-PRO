@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { CREATIVE_UPLOAD_MAX_BYTES } from "../src/lib/creative-upload";
 import { billingProductsFixture, expectDialogWithinViewport, expectNoHorizontalOverflow, masonryGalleryFixture, masonryLayoutIsReady, mockCreativeImageUploads, openCreativeHistory, readMasonryLayout } from "./responsive-helpers";
+import { E2E_PROTOCOL_ORIGIN } from "./support";
 
 async function waitForCreativeComposerReady(page: Page) {
     await expect(page.locator(".creative-composer")).toHaveAttribute("data-ready", "true", { timeout: 45_000 });
@@ -551,6 +553,73 @@ test("creative composer renders uploaded images as thumbnails instead of filenam
     await expect(preview).toBeHidden();
 });
 
+test("creative composer accepts dropped media in the draft and rejects invalid batches", async ({ page, request }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium", "External file dragging requires a desktop pointer");
+    const image = { name: "drop-reference.webp", mimeType: "image/webp", buffer: readFileSync("public/generation-smoke.webp") };
+    const video = { name: "drop-video.mp4", mimeType: "video/mp4", buffer: await (await request.get(`${E2E_PROTOCOL_ORIGIN}/media/fixture.mp4`)).body() };
+    const audio = { name: "drop-audio.wav", mimeType: "audio/wav", buffer: await (await request.get(`${E2E_PROTOCOL_ORIGIN}/media/fixture.wav`)).body() };
+    const requests = await mockCreativeImageUploads(page, [image.name], image.buffer);
+
+    await page.goto("/create", { waitUntil: "domcontentloaded" });
+    await waitForCreativeComposerReady(page);
+    const composer = page.locator(".creative-composer");
+    const input = composer.locator("textarea");
+    const hint = composer.getByRole("status").filter({ hasText: "松开添加素材" });
+    const drag = await page.evaluateHandle(() => {
+        const transfer = new DataTransfer();
+        transfer.items.add(new File(["reference"], "preview.webp", { type: "image/webp" }));
+        return transfer;
+    });
+    await input.dispatchEvent("dragenter", { dataTransfer: drag });
+    await expect(hint).toBeVisible();
+    await expect(hint).toHaveCSS("pointer-events", "none");
+    await input.dispatchEvent("dragleave", { dataTransfer: drag, relatedTarget: await composer.getByRole("button", { name: "添加素材", exact: true }).elementHandle() });
+    await expect(hint).toBeVisible();
+    await composer.dispatchEvent("dragleave", { dataTransfer: drag });
+    await expect(hint).toBeHidden();
+    await drag.dispose();
+
+    const draft = "保留正在编辑的内容";
+    await input.fill(draft);
+    expect(
+        await input.evaluate((element) => {
+            const dataTransfer = new DataTransfer();
+            dataTransfer.setData("text/plain", "普通文本");
+            dataTransfer.setData("text/uri-list", "https://example.com/");
+            return element.dispatchEvent(new DragEvent("drop", { dataTransfer, bubbles: true, cancelable: true }));
+        }),
+    ).toBe(true);
+    await input.drop({ files: [image, video, audio] });
+    await expect(hint).toBeHidden();
+    await expect(input).toHaveValue(draft);
+    await expect(composer.getByRole("img", { name: image.name })).toHaveAttribute("src", /^blob:/);
+    await expect(composer.getByLabel(`已上传视频 ${video.name}`).locator("video")).toHaveAttribute("src", /^blob:/);
+    await expect(composer.getByText(audio.name, { exact: true })).toBeVisible();
+    await expectNoHorizontalOverflow(page, "creative media drop");
+
+    const rejectedImage = { ...image, name: "rejected-reference.webp" };
+    await input.drop({ files: [rejectedImage, { name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("unsupported") }] });
+    await expect(page.getByText("notes.txt 不是支持的图片、视频或音频格式", { exact: true })).toBeVisible();
+    await expect(composer.getByRole("img", { name: rejectedImage.name })).toHaveCount(0);
+    await input.evaluate((element, bytes) => {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(new File([new Uint8Array(bytes)], "oversized.webp", { type: "image/webp" }));
+        element.dispatchEvent(new DragEvent("drop", { dataTransfer, bubbles: true, cancelable: true }));
+    }, CREATIVE_UPLOAD_MAX_BYTES + 1);
+    await expect(page.getByText("oversized.webp 超过 20MB", { exact: true })).toBeVisible();
+    await expect(composer.getByRole("img", { name: "oversized.webp" })).toHaveCount(0);
+
+    for (const file of [image, video, audio]) {
+        const remove = composer.getByRole("button", { name: `移除${file.name}`, exact: true });
+        await remove.click();
+        await expect(remove).toHaveCount(0);
+    }
+    await expect(input).toHaveValue(draft);
+    await expect(page).toHaveURL(/\/create$/);
+    expect(requests.conversationCreates()).toBe(0);
+    expect(requests.assetUploads()).toBe(0);
+});
+
 test("creative conversation keeps successful media rounds copy-only", async ({ page }, testInfo) => {
     if (testInfo.project.name === "chromium") await page.setViewportSize({ width: 1672, height: 941 });
     const imageBuffer = readFileSync("public/generation-smoke.webp");
@@ -691,6 +760,13 @@ test("creative conversation keeps successful media rounds copy-only", async ({ p
     expect(disabledSendAppearance).toEqual({ disabled: true, backgroundImage: "none", backgroundColor: "rgb(226, 229, 232)" });
     expect(compactAppearance.composerHeight).toBeLessThan(expandedComposerHeight);
     expect(compactAppearance.shellHeight).toBeLessThan(expandedComposerHeight);
+    if (testInfo.project.name === "chromium") {
+        const fileName = "compact-drop.webp";
+        await composer.locator("textarea").drop({ files: { name: fileName, mimeType: "image/webp", buffer: imageBuffer } });
+        await expect(composer).toHaveAttribute("data-compact", "false");
+        await expect(composer.getByRole("img", { name: fileName })).toHaveAttribute("src", /^blob:/);
+        await composer.getByRole("button", { name: `移除${fileName}`, exact: true }).click();
+    }
     await page.getByRole("button", { name: "回到底部" }).click();
     await expect(composer).toHaveAttribute("data-compact", "false");
     await expect.poll(() => scrollArea.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(4);
@@ -706,6 +782,13 @@ test("creative conversation keeps successful media rounds copy-only", async ({ p
     await expect(round).toBeVisible();
     await expect(round.getByLabel("本轮创作参数")).toContainText("e2e-image-model");
     await expectNoHorizontalOverflow(page, `${testInfo.project.name} creative media round dark`);
+    if (testInfo.project.name === "chromium") {
+        const fileName = "dark-drop.webp";
+        await composer.locator("textarea").drop({ files: { name: fileName, mimeType: "image/webp", buffer: imageBuffer } });
+        await expect(composer.getByRole("img", { name: fileName })).toHaveAttribute("src", /^blob:/);
+        await expect(composer.getByText("松开添加素材", { exact: true })).toHaveCount(0);
+        await composer.getByRole("button", { name: `移除${fileName}`, exact: true }).click();
+    }
     if (process.env.VOZEB_PRO_VISUAL_CAPTURE === "1") {
         const screenshotPath = testInfo.outputPath(`creative-media-single-dark-${testInfo.project.name}.png`);
         await round.screenshot({ path: screenshotPath });
@@ -861,7 +944,16 @@ test("creative video first and last frame controls support upload, removal and r
     await page.getByRole("button", { name: "发送" }).click();
     await expect(page.getByText("请先同时选择视频首帧和尾帧图片").last()).toBeVisible();
 
-    await uploadFrame("首帧", firstFileName);
+    if (testInfo.project.name === "chromium") {
+        await composer.locator("textarea").drop({ files: { name: firstFileName, mimeType: "image/webp", buffer: frameBuffer } });
+        await expect(composer.getByRole("img", { name: firstFileName })).toHaveAttribute("src", /^blob:/);
+        await expect(frames.getByRole("img", { name: firstFileName })).toHaveCount(0);
+        await frames.getByRole("button", { name: "添加视频首帧" }).click();
+        await page.getByRole("button", { name: `设为首帧：${firstFileName}`, exact: true }).click();
+        await expect(composer.getByRole("img", { name: firstFileName })).toHaveCount(1);
+    } else {
+        await uploadFrame("首帧", firstFileName);
+    }
     await uploadFrame("尾帧", lastFileName);
     await expect(frames.getByRole("img", { name: firstFileName })).toBeVisible();
     await expect(frames.getByRole("img", { name: lastFileName })).toBeVisible();

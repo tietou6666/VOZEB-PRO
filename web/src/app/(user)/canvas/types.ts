@@ -105,6 +105,7 @@ export type CanvasNodeMetadata = {
     };
     content?: string;
     composerContent?: string;
+    promptDraft?: string;
     prompt?: string;
     sourcePrompt?: string;
     status?: CanvasNodeStatus;

@@ -145,8 +145,8 @@ export function useCanvasNodeMediaActions({ state, tasks, interactions }: { stat
         setEditRequestNonce((value) => value + 1);
     }, []);
 
-    const handleNodePromptChange = useCallback((nodeId: string, prompt: string) => {
-        setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt } } : node)));
+    const handleNodePromptChange = useCallback((nodeId: string, promptDraft: string) => {
+        setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, promptDraft } } : node)));
     }, []);
 
     const handleConfigNodeChange = useCallback((nodeId: string, patch: Partial<CanvasNodeData["metadata"]>) => {

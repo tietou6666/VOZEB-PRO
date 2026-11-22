@@ -957,16 +957,33 @@ test("Agent sends uploaded image bytes to both planning and reverse-prompt text 
         .toBuffer();
     expect((image.length * 4) / 3).toBeGreaterThan(4 * 1024 * 1024);
     const fileName = "agent-vision-reference.png";
+    const assetPosts: string[] = [];
+    page.on("request", (request) => {
+        if (request.method() === "POST" && /\/api\/creative\/(?:assets|conversations)$/.test(new URL(request.url()).pathname)) assetPosts.push(new URL(request.url()).pathname);
+    });
     await page.goto("/create", { waitUntil: "domcontentloaded" });
     await expect(page.locator(".creative-composer")).toHaveAttribute("data-ready", "true", { timeout: 45_000 });
-    const chooserPromise = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "添加素材" }).click();
-    await (await chooserPromise).setFiles({ name: fileName, mimeType: "image/png", buffer: image });
-    await expect(page.getByRole("img", { name: fileName })).toBeVisible();
-    await page.getByRole("textbox", { name: "输入你的创作想法、脚本或画面要求" }).fill("读取这张图片并反推提示词");
+    const textbox = page.getByRole("textbox", { name: "输入你的创作想法、脚本或画面要求" });
+    const file = { name: fileName, mimeType: "image/png", buffer: image };
+    if (testInfo.project.name === "chromium") {
+        await textbox.drop({ files: file });
+    } else {
+        const chooserPromise = page.waitForEvent("filechooser");
+        await page.getByRole("button", { name: "添加素材" }).click();
+        await (await chooserPromise).setFiles(file);
+    }
+    await expect(page.getByRole("img", { name: fileName })).toHaveAttribute("src", /^blob:/);
+    expect(assetPosts).toEqual([]);
+    await textbox.fill("读取这张图片并反推提示词");
+    const assetResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/creative/assets");
     const runResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/agent/runs");
     await page.getByRole("button", { name: "发送" }).click();
-    const runResponse = await runResponsePromise;
+    const [assetResponse, runResponse] = await Promise.all([assetResponsePromise, runResponsePromise]);
+    expect(assetResponse.ok(), await assetResponse.text()).toBe(true);
+    const { asset } = ((await assetResponse.json()) as { data: { asset: { id: string; conversationId: string } } }).data;
+    expect(assetPosts).toEqual(["/api/creative/conversations", "/api/creative/assets"]);
+    expect(asset.id).not.toMatch(/^draft-/);
+    expect(runResponse.request().postDataJSON()).toMatchObject({ conversationId: asset.conversationId, assetIds: [asset.id] });
     expect(runResponse.ok(), await runResponse.text()).toBe(true);
     const runId = ((await runResponse.json()) as { data: { run: { id: string } } }).data.run.id;
     await expect.poll(async () => ((await (await request.get("/api/agent/runs/" + runId)).json()) as { data: { run: { status: string } } }).data.run.status, { timeout: 60_000 }).toBe("completed");

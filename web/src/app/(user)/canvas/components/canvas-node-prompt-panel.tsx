@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type SyntheticEvent } from "react";
+import { useRef, useState, type PointerEvent as ReactPointerEvent, type SyntheticEvent } from "react";
 import { LoaderCircle, Maximize2, Minimize2, MoveDiagonal2, Square } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 
@@ -47,8 +47,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const hasTextContent = node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim());
     const hasImageContent = isCanvasImageNodeType(node.type) && Boolean(node.metadata?.content);
     const isPanorama = node.type === CanvasNodeType.Panorama;
-    const isEditingExistingContent = hasTextContent || hasImageContent;
-    const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
+    const prompt = node.metadata?.promptDraft ?? (hasTextContent || hasImageContent ? "" : node.metadata?.prompt || "");
     const [expanded, setExpanded] = useState(false);
     const expandedEditorRef = useRef<HTMLTextAreaElement | null>(null);
     const credits = requestCreditCost({
@@ -63,20 +62,13 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         videoSeconds: config.videoSeconds,
     });
 
-    useEffect(() => {
-        setPrompt(isEditingExistingContent ? "" : node.metadata?.prompt || "");
-    }, [isEditingExistingContent, node.id]);
-
-    const updatePrompt = (value: string) => {
-        setPrompt(value);
-        if (!isEditingExistingContent) onPromptChange(node.id, value);
-    };
+    const updatePrompt = (value: string) => onPromptChange(node.id, value);
 
     const submit = () => {
         const text = prompt.trim();
         if (!text || isRunning) return false;
         onGenerate(node.id, mode, text);
-        setPrompt("");
+        updatePrompt("");
         return true;
     };
 

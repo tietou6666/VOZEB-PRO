@@ -3,11 +3,12 @@
 import { Button, Input, Popover, Tooltip } from "antd";
 import type { TextAreaRef } from "antd/es/input/TextArea";
 import { ArrowUp, AtSign, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, FileAudio, FileVideo, ImageIcon, Plus, Sparkles, Square, WandSparkles, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type MouseEventHandler, type PointerEventHandler, type RefObject, type WheelEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEventHandler, type PointerEventHandler, type RefObject, type WheelEvent } from "react";
 
 import type { CreativeAsset, CreativeGenerationMode, CreativeGenerationPreferences } from "@/lib/creative-runtime-contract";
 import { creativeAssetReferenceAliases } from "@/lib/creative-asset-references";
 import { clipboardImageFiles } from "@/lib/clipboard-image-files";
+import { droppedFiles, leftDropTarget, preventFileDragEvent } from "@/lib/file-drop";
 import { imagePreviewUrl } from "@/lib/media-image-url";
 import type { VideoReferenceRole } from "@/lib/video-reference-contract";
 import { cn } from "@/lib/utils";
@@ -40,7 +41,7 @@ export function CreativeComposer({
     onSubmit,
     onCancel,
     onAttachment,
-    onPasteImages,
+    onAddFiles,
     attachments,
     referenceAssets,
     selectedAssetIds,
@@ -79,7 +80,7 @@ export function CreativeComposer({
     onSubmit: () => void;
     onCancel: () => void;
     onAttachment: () => void;
-    onPasteImages: (files: File[]) => void;
+    onAddFiles: (files: File[]) => void;
     attachments: CreativeAsset[];
     referenceAssets: CreativeAsset[];
     selectedAssetIds: string[];
@@ -110,6 +111,7 @@ export function CreativeComposer({
     onExpand?: () => void;
 }) {
     const [ready, setReady] = useState(false);
+    const [fileDragActive, setFileDragActive] = useState(false);
     const [skillPickerOpen, setSkillPickerOpen] = useState(false);
     const [modePickerOpen, setModePickerOpen] = useState(false);
     const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -188,6 +190,22 @@ export function CreativeComposer({
         focusComposerAt(result.cursor);
     };
 
+    const handleFileDragOver = (event: DragEvent<HTMLDivElement>) => {
+        if (!preventFileDragEvent(event)) return;
+        event.dataTransfer.dropEffect = uploading ? "none" : "copy";
+        setFileDragActive(!uploading);
+    };
+
+    const handleFileDrop = (event: DragEvent<HTMLDivElement>) => {
+        if (!preventFileDragEvent(event)) return;
+        setFileDragActive(false);
+        if (uploading) return;
+        const files = droppedFiles(event);
+        if (!files.length) return;
+        onAddFiles(files);
+        if (compact) onExpand?.();
+    };
+
     const composerInput = (compactMode: boolean) => (
         <Popover
             trigger={[]}
@@ -252,7 +270,7 @@ export function CreativeComposer({
                         const files = clipboardImageFiles(event.clipboardData);
                         if (!files.length) return;
                         event.preventDefault();
-                        onPasteImages(files);
+                        onAddFiles(files);
                     }}
                     onPressEnter={(event) => {
                         if (mentionQuery !== null && mentionCandidates.length) {
@@ -275,11 +293,25 @@ export function CreativeComposer({
                 data-ready={ready}
                 data-compact={compact ? "true" : "false"}
                 className={cn(
-                    "creative-composer border border-[#e2e6ea] bg-white shadow-[0_10px_32px_rgba(32,36,42,0.06)] transition-[border-radius,padding,box-shadow] duration-200 dark:border-[#30363e] dark:bg-[#181b20] dark:shadow-black/24",
+                    "creative-composer relative border border-[#e2e6ea] bg-white shadow-[0_10px_32px_rgba(32,36,42,0.06)] transition-[border-radius,padding,box-shadow] duration-200 dark:border-[#30363e] dark:bg-[#181b20] dark:shadow-black/24",
                     compact ? "h-[60px] min-h-[60px] max-h-[60px] rounded-[20px] p-2" : centered ? "rounded-[22px] p-3 sm:p-4" : "rounded-2xl p-2.5",
                 )}
                 onClick={compact ? onExpand : undefined}
+                onDragEnter={handleFileDragOver}
+                onDragOver={handleFileDragOver}
+                onDragLeave={(event) => {
+                    if (leftDropTarget(event)) setFileDragActive(false);
+                }}
+                onDrop={handleFileDrop}
             >
+                {fileDragActive && !uploading ? (
+                    <div
+                        role="status"
+                        className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-[inherit] border border-dashed border-indigo-500 bg-indigo-50/95 text-sm font-medium text-indigo-800 dark:border-indigo-400 dark:bg-indigo-950/95 dark:text-indigo-100"
+                    >
+                        松开添加素材
+                    </div>
+                ) : null}
                 {selectedSkill || otherAttachments.length ? (
                     <div className={cn("gap-2 overflow-hidden px-2 pb-1 pt-1", compact ? "hidden" : "flex")}>
                         {selectedSkill ? (
@@ -332,32 +364,31 @@ export function CreativeComposer({
                                 onUpload={onUploadVideoFrame}
                                 onRemove={onRemoveVideoFrame}
                             />
-                        ) : (
-                            <>
-                                {inputMediaAttachments.map((asset) => {
-                                    return <ComposerMediaThumbnail key={asset.id} asset={asset} compact={compact} onRemove={onRemoveAttachment} />;
-                                })}
-                                <Tooltip title={mediaAttachments.length ? "继续添加参考素材" : "添加素材"}>
-                                    <Button
-                                        type="text"
-                                        className={cn(
-                                            "mt-0.5 shrink-0 !border !border-[#e5e9ed] !bg-[#f5f7f8] !text-[#87919d] hover:!border-[#d4dae0] hover:!bg-[#eef1f3] hover:!text-[#38424e] dark:!border-[#343a42] dark:!bg-[#24282e] dark:!text-[#9ca6b2] dark:hover:!border-[#49515b] dark:hover:!bg-[#2c3239] dark:hover:!text-white",
-                                            compact
-                                                ? "!size-11 !min-w-11 !rounded-xl"
-                                                : mediaAttachments.length
-                                                  ? "!size-10 !min-w-10 !rounded-lg sm:!size-12 sm:!min-w-12"
-                                                  : centered
-                                                    ? "!size-12 !min-w-12 !rounded-xl sm:!size-14 sm:!min-w-14"
-                                                    : "!size-11 !min-w-11 !rounded-xl",
-                                        )}
-                                        icon={<Plus className="size-5" />}
-                                        onClick={onAttachment}
-                                        loading={uploading}
-                                        aria-label={mediaAttachments.length ? "继续添加参考素材" : "添加素材"}
-                                    />
-                                </Tooltip>
-                            </>
-                        )}
+                        ) : null}
+                        {inputMediaAttachments.map((asset) => (
+                            <ComposerMediaThumbnail key={asset.id} asset={asset} compact={compact} onRemove={onRemoveAttachment} />
+                        ))}
+                        {!showVideoFrames ? (
+                            <Tooltip title={mediaAttachments.length ? "继续添加参考素材" : "添加素材"}>
+                                <Button
+                                    type="text"
+                                    className={cn(
+                                        "mt-0.5 shrink-0 !border !border-[#e5e9ed] !bg-[#f5f7f8] !text-[#87919d] hover:!border-[#d4dae0] hover:!bg-[#eef1f3] hover:!text-[#38424e] dark:!border-[#343a42] dark:!bg-[#24282e] dark:!text-[#9ca6b2] dark:hover:!border-[#49515b] dark:hover:!bg-[#2c3239] dark:hover:!text-white",
+                                        compact
+                                            ? "!size-11 !min-w-11 !rounded-xl"
+                                            : mediaAttachments.length
+                                              ? "!size-10 !min-w-10 !rounded-lg sm:!size-12 sm:!min-w-12"
+                                              : centered
+                                                ? "!size-12 !min-w-12 !rounded-xl sm:!size-14 sm:!min-w-14"
+                                                : "!size-11 !min-w-11 !rounded-xl",
+                                    )}
+                                    icon={<Plus className="size-5" />}
+                                    onClick={onAttachment}
+                                    loading={uploading}
+                                    aria-label={mediaAttachments.length ? "继续添加参考素材" : "添加素材"}
+                                />
+                            </Tooltip>
+                        ) : null}
                     </div>
                     {composerInput(compact)}
                     {compact ? (

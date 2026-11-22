@@ -547,7 +547,7 @@ export default function CreatePage() {
             }}
             onRemoveVideoFrame={removeVideoFrame}
             onAttachment={() => attachmentInputRef.current?.click()}
-            onPasteImages={(files) => void uploadAttachments(files)}
+            onAddFiles={(files) => void uploadAttachments(files)}
             referenceAssets={agent.assets}
             selectedAssetIds={agent.selectedAssetIds}
             onReferenceAsset={agent.selectAsset}
