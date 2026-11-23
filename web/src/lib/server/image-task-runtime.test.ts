@@ -281,8 +281,8 @@ describe("image task runtime submission safety", () => {
         expect(state.result).toBeUndefined();
     });
 
-    it("downloads system-proxied image results with task-bound media authorization", async () => {
-        state.config = { ...state.config, baseUrl: "/api/ai/system/channel-one", advancedConfig: { ...emptyAdvancedConfig(), protocol: "openai" } };
+    it("downloads system-proxied image results with authorization bound to the upstream model", async () => {
+        state.config = { ...state.config, baseUrl: "/api/ai/system/channel-one", model: "vendor-image-ext", logicalModel: "image-one", advancedConfig: { ...emptyAdvancedConfig(), protocol: "openai" } };
         state.candidateConfigs = [];
         const remoteUrl = "https://provider.example/media/result.png";
         const proxyUrl = `/api/ai/system/channel-one/_media?url=${encodeURIComponent(remoteUrl)}`;
@@ -295,7 +295,7 @@ describe("image task runtime submission safety", () => {
         if (step.state !== "result_ready") throw new Error("image result was not ready");
         await expect(persistImageTaskResult(state, "http://internal", step.resultUrl)).resolves.toMatchObject({ status: "success" });
 
-        expect(mocks.mediaHeaders).toHaveBeenCalledWith({ userId: "user-one", taskType: "image", taskId: "image-one", channelId: "channel-one", upstreamModel: "image-one", url: remoteUrl });
+        expect(mocks.mediaHeaders).toHaveBeenCalledWith({ userId: "user-one", taskType: "image", taskId: "image-one", channelId: "channel-one", upstreamModel: "vendor-image-ext", url: remoteUrl });
         expect(mocks.inlineResult).toHaveBeenCalledWith(proxyUrl, "http://internal", "worker-context", remoteUrl, { "x-media-auth": "signed" });
         expect(mocks.directResult).not.toHaveBeenCalled();
     });
