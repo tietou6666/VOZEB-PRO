@@ -549,9 +549,9 @@ test("canvas video first and last frame roles persist and retry from the output 
         await expect
             .poll(async () => {
                 const stored = await readCanvasProject(request, `/api/canvas/projects/${project.id}`);
-                return stored.nodes.find((item) => item.type === "video")?.metadata?.videoReferences?.map((reference) => reference.role);
+                return stored.nodes.find((item) => item.type === "video")?.metadata;
             })
-            .toEqual(["first_frame", "last_frame"]);
+            .toMatchObject({ promptDraft: "让画面从清晨平滑过渡到黄昏", videoReferences: [{ role: "first_frame" }, { role: "last_frame" }] });
     } finally {
         await deleteCanvasProject(request, project.id);
     }
@@ -1226,6 +1226,71 @@ test("canvas Agent attachment remove badge stays compact and theme readable", as
         await removeButton.click();
         await expect(removeButton).toHaveCount(0);
     } finally {
+        await deleteCanvasProject(request, project.id);
+    }
+});
+
+test("canvas keeps node prompts while generating and after success, failure and reload", async ({ page, request }) => {
+    const drafts = [
+        { type: "image", x: 50, y: 55, text: "  绘制晚霞\n保留云层层次  ", model: "e2e-image", status: "success" },
+        { type: "video", x: 435, y: 55, text: "让镜头缓慢向前移动", model: "e2e-video", status: "success" },
+        { type: "audio", x: 50, y: 385, text: "读出这句话", model: "e2e-audio", status: "success" },
+        { type: "text", x: 435, y: 385, text: "写一段海边的场景描述", model: "e2e-text-fail", status: "error" },
+    ];
+    const project = await createCanvasProject(request, {
+        title: `Canvas 提交后保留提示词 ${randomUUID().slice(0, 8)}`,
+        viewport: { x: 35, y: 70, k: 1 },
+        nodes: drafts.map(({ type, x, y, model }) => node(type, type, x, y, 220, 150, { model, ...(type === "image" ? { size: "64x64", count: 1 } : {}) })),
+        connections: [],
+    });
+    const projectPath = `/api/canvas/projects/${project.id}`;
+    const videoSubmission = Promise.withResolvers<void>();
+    const revisedVideoDraft = "下一轮改为固定镜头";
+
+    try {
+        await page.route("**/api/video-generation-tasks", async (route) => {
+            await videoSubmission.promise;
+            await route.continue();
+        });
+        await page.goto(`/canvas/${project.id}`, { waitUntil: "domcontentloaded" });
+        await page.getByRole("button", { name: "收起 Agent 面板" }).click();
+        for (const { type, text, status } of drafts) {
+            const target = page.locator(`[data-node-id="${type}"]`);
+            await target.click({ position: { x: 40, y: 40 } });
+            if (type === "text") await page.getByRole("button", { name: "编辑文本", exact: true }).click();
+            const input = target.getByRole("textbox", { name: "节点提示词" });
+            const generate = target.getByRole("button", { name: "生成", exact: true });
+            if (type === "image") {
+                await target.getByRole("button", { name: "放大提示词输入" }).click();
+                const dialog = page.getByRole("dialog", { name: "编辑提示词" });
+                await dialog.getByRole("textbox", { name: "提示词编辑器" }).fill(text);
+                await dialog.getByRole("button", { name: "生成", exact: true }).click();
+                await expect(dialog).toBeHidden();
+            } else {
+                await input.fill(text);
+                await generate.click();
+            }
+            await expect(input).toHaveValue(text);
+            if (type === "video") {
+                await expect(target.getByRole("button", { name: "停止生成" })).toBeVisible();
+                await input.fill(revisedVideoDraft);
+                videoSubmission.resolve();
+            }
+            const expectedDraft = type === "video" ? revisedVideoDraft : text;
+            await expect.poll(async () => (await readCanvasProject(request, projectPath)).nodes.find((item) => item.id === type)?.metadata, { timeout: 30_000 }).toMatchObject({ status, prompt: text.trim(), promptDraft: expectedDraft });
+            await expect(input).toHaveValue(expectedDraft);
+        }
+
+        await page.reload({ waitUntil: "domcontentloaded" });
+        const image = page.locator('[data-node-id="image"]');
+        await image.click({ position: { x: 40, y: 40 } });
+        await expect(image.getByRole("textbox", { name: "节点提示词" })).toHaveValue(drafts[0].text);
+        const failed = page.locator('[data-node-id="text"]');
+        await failed.click({ position: { x: 40, y: 40 } });
+        await page.getByRole("button", { name: "编辑文本", exact: true }).click();
+        await expect(failed.getByRole("textbox", { name: "节点提示词" })).toHaveValue(drafts[3].text);
+    } finally {
+        videoSubmission.resolve();
         await deleteCanvasProject(request, project.id);
     }
 });

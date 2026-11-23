@@ -21,7 +21,7 @@ export type ImageUpstreamStep =
     | { state: "needs_review"; reason: string; status: string }
     | { state: "result_ready"; resultUrl: string; status: string }
     | { state: "completed" }
-    | { state: "failed"; error: string; status: string; retryReason?: "upstream_failed" };
+    | { state: "failed"; error: string; status: string; retryReason?: "upstream_failed" | "submission_rate_limited" };
 
 export async function createImageTaskUpstreamStep(task: ImageTask, origin: string, publicOrigin: string, cookie = "", workerUserId = ""): Promise<ImageUpstreamStep> {
     const current = await getImageTask(task.id);
@@ -61,6 +61,9 @@ export async function createImageTaskUpstreamStep(task: ImageTask, origin: strin
         attempts = finishGenerationAttempt(attempts, candidate.attemptNo, { status: "failed", error: error.message });
         await refundImageCandidate(candidate);
         await updateImageTask(task.id, { attempts, attemptNo: candidate.attemptNo, upstream: undefined, billing: undefined });
+        if (error.status === 429 && candidate.candidateConfigs?.length) {
+            return { state: "failed", error: error.message, status: "rate_limited", retryReason: "submission_rate_limited" };
+        }
         return { state: "failed", error: error.message, status: "failed" };
     }
 }

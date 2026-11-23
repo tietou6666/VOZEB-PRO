@@ -99,6 +99,30 @@ describe("image task runtime submission safety", () => {
         expect(state.attempts?.map(({ status }) => status)).toEqual(["failed"]);
     });
 
+    it("switches to the next channel after a definite image submission rate limit", async () => {
+        mocks.runCustom.mockRejectedValueOnce(new GenerationSubmissionSafeFailure("上游限流", 429));
+
+        await expect(createImageTaskUpstreamStep(state, "http://internal", "https://public.example")).resolves.toMatchObject({
+            state: "failed",
+            retryReason: "submission_rate_limited",
+        });
+        await expect(prepareImageTaskAutomaticRetry(state, "上游限流")).resolves.toMatchObject({ config: { channelId: "channel-two" }, candidateConfigs: [] });
+
+        mocks.runGemini.mockResolvedValueOnce({ dataUrl: "", pending: { id: "upstream-two", mediaBaseUrl: "https://two.example", pollBaseUrl: "https://two.example" } });
+        await expect(createImageTaskUpstreamStep(state, "http://internal", "https://public.example")).resolves.toMatchObject({ state: "pending", upstream: { id: "upstream-two" } });
+        expect(mocks.runGemini).toHaveBeenCalledOnce();
+        expect(state.attempts?.map(({ status }) => status)).toEqual(["failed", "running"]);
+    });
+
+    it("ends a rate-limited image submission when no backup channel is configured", async () => {
+        state.candidateConfigs = [];
+        mocks.runCustom.mockRejectedValueOnce(new GenerationSubmissionSafeFailure("上游限流", 429));
+
+        const step = await createImageTaskUpstreamStep(state, "http://internal", "https://public.example");
+        expect(step).toMatchObject({ state: "failed", error: "上游限流" });
+        expect(step).not.toHaveProperty("retryReason");
+    });
+
     it("prepares exactly one new attempt after an explicit upstream generation failure", async () => {
         mocks.runCustom.mockRejectedValueOnce(new mocks.UpstreamTerminalError("上游生成失败"));
 

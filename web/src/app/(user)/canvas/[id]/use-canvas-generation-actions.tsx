@@ -101,7 +101,7 @@ export function useCanvasGenerationActions({ state, tasks, interactions }: { sta
     );
 
     const handleGenerateNode = useCallback(
-        async (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => {
+        async (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string, promptDraft?: string) => {
             const sourceNode = nodesRef.current.find((node) => node.id === nodeId);
             const generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode);
             if (!isAiConfigReady(generationConfig, generationConfig.model)) {
@@ -187,6 +187,7 @@ export function useCanvasGenerationActions({ state, tasks, interactions }: { sta
                         height: isEmptyImageNode ? sourceNode?.height || imageConfig.height : imageConfig.height,
                         metadata: {
                             prompt: effectivePrompt,
+                            promptDraft,
                             sourcePrompt,
                             status: NODE_STATUS_LOADING,
                             isBatchRoot: count > 1,
@@ -210,6 +211,7 @@ export function useCanvasGenerationActions({ state, tasks, interactions }: { sta
                         height: imageConfig.height,
                         metadata: {
                             prompt: effectivePrompt,
+                            promptDraft,
                             sourcePrompt,
                             status: NODE_STATUS_LOADING,
                             batchRootId: count > 1 ? rootId : undefined,
@@ -235,7 +237,7 @@ export function useCanvasGenerationActions({ state, tasks, interactions }: { sta
                                             width: rootNode.width,
                                             height: rootNode.height,
                                             title: rootNode.title,
-                                            metadata: { ...node.metadata, ...rootNode.metadata, errorDetails: undefined },
+                                            metadata: { ...node.metadata, ...rootNode.metadata, promptDraft: node.metadata?.promptDraft, errorDetails: undefined },
                                         }
                                       : isImageNode
                                         ? {
@@ -360,6 +362,7 @@ export function useCanvasGenerationActions({ state, tasks, interactions }: { sta
                         height: isEmptyVideoNode ? sourceNode.height : spec.height,
                         metadata: {
                             prompt: effectivePrompt,
+                            promptDraft,
                             status: NODE_STATUS_LOADING,
                             model: generationConfig.model,
                             size: generationConfig.size,
@@ -373,7 +376,7 @@ export function useCanvasGenerationActions({ state, tasks, interactions }: { sta
                     pendingChildIds = [videoId];
                     setNodes((prev) =>
                         isEmptyVideoNode
-                            ? prev.map((node) => (node.id === nodeId ? { ...node, ...videoNode } : node))
+                            ? prev.map((node) => (node.id === nodeId ? { ...node, ...videoNode, metadata: { ...videoNode.metadata, promptDraft: node.metadata?.promptDraft } } : node))
                             : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode],
                     );
                     if (!isEmptyVideoNode) setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: nodeId, toNodeId: videoId }]);
@@ -406,12 +409,12 @@ export function useCanvasGenerationActions({ state, tasks, interactions }: { sta
                         position: isEmptyAudioNode ? sourceNode.position : { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y + ((sourceNode?.height || spec.height) - spec.height) / 2 },
                         width: isEmptyAudioNode ? sourceNode.width : spec.width,
                         height: isEmptyAudioNode ? sourceNode.height : spec.height,
-                        metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, ...buildAudioGenerationMetadata(generationConfig) },
+                        metadata: { prompt: effectivePrompt, promptDraft, status: NODE_STATUS_LOADING, ...buildAudioGenerationMetadata(generationConfig) },
                     };
                     pendingChildIds = [audioId];
                     setNodes((prev) =>
                         isEmptyAudioNode
-                            ? prev.map((node) => (node.id === nodeId ? { ...node, ...audioNode } : node))
+                            ? prev.map((node) => (node.id === nodeId ? { ...node, ...audioNode, metadata: { ...audioNode.metadata, promptDraft: node.metadata?.promptDraft } } : node))
                             : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), audioNode],
                     );
                     if (!isEmptyAudioNode) setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: nodeId, toNodeId: audioId }]);
@@ -452,7 +455,7 @@ export function useCanvasGenerationActions({ state, tasks, interactions }: { sta
                         },
                         width: textConfig.width,
                         height: textConfig.height,
-                        metadata: { prompt: effectivePrompt, status: NODE_STATUS_LOADING, fontSize: 14 },
+                        metadata: { prompt: effectivePrompt, promptDraft, status: NODE_STATUS_LOADING, fontSize: 14 },
                     }));
                     setNodes((prev) => [...prev.map((node) => (node.id === nodeId && isConfigNode ? { ...node, metadata: { ...node.metadata, prompt: effectivePrompt, status: NODE_STATUS_LOADING, errorDetails: undefined } } : node)), ...childNodes]);
                     setConnections((prev) => [...prev, ...childIds.map((childId) => ({ id: nanoid(), fromNodeId: nodeId, toNodeId: childId }))]);

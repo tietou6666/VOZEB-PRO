@@ -188,6 +188,22 @@ test("image task persists a real media result and reuses the same request identi
     expect(state.requests.filter((item) => item.method === "POST" && item.path.endsWith("/images/generations"))).toHaveLength(1);
 });
 
+test("image submission uses the backup channel after a rate limit", async ({ request }) => {
+    const model = "e2e-image-fallback";
+    const created = await request.post("/api/image-tasks", {
+        data: { kind: "generation", config: { model, quality: "standard", size: "64x64" }, prompt: "image channel fallback", source: "image-workbench" },
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+    const task = ((await created.json()) as { task: { id: string } }).task;
+    expect(await pollTask(request, `/api/image-tasks/${task.id}`)).toMatchObject({ status: "success", result: { mimeType: "image/png" } });
+
+    const state = await protocolFixtureState(request);
+    expect(state.requests.filter((item) => item.method === "POST" && item.path.endsWith("/images/generations"))).toMatchObject([
+        { authorization: "Bearer e2e-primary-secret", model },
+        { authorization: "Bearer e2e-backup-secret", model },
+    ]);
+});
+
 test("unified creative page reaches the local planning and image protocols", async ({ page, request }) => {
     await page.goto("/create", { waitUntil: "domcontentloaded" });
     await expect(page.locator(".creative-composer")).toHaveAttribute("data-ready", "true", { timeout: 45_000 });

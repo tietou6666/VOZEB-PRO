@@ -30,7 +30,7 @@ type CanvasNodePromptPanelProps = {
     isRunning: boolean;
     onPromptChange: (nodeId: string, prompt: string) => void;
     onConfigChange: (nodeId: string, patch: Partial<CanvasNodeData["metadata"]>) => void;
-    onGenerate: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => void;
+    onGenerate: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string, promptDraft: string) => void;
     onStop: (nodeId: string) => void;
     onPanelResizeStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
     onPanelResizeBy: (deltaWidth: number, deltaHeight: number) => void;
@@ -67,8 +67,8 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const submit = () => {
         const text = prompt.trim();
         if (!text || isRunning) return false;
-        onGenerate(node.id, mode, text);
-        updatePrompt("");
+        if (node.metadata?.promptDraft === undefined) updatePrompt(prompt);
+        onGenerate(node.id, mode, text, prompt);
         return true;
     };
 

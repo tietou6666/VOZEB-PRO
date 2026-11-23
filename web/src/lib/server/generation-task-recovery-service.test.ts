@@ -363,6 +363,22 @@ describe("generation task recovery service", () => {
         expect(result).toMatchObject({ claimed: 1, pending: 0, failed: 1 });
     });
 
+    it("schedules the backup channel after a rate-limited image submission without a task ID", async () => {
+        const task = { id: "image-rate-limited", userId: "user-one", status: "pending", config: { channelId: "channel-one", apiFormat: "openai" } };
+        const retry = { ...task, config: { channelId: "channel-two", apiFormat: "openai" } };
+        mocks.claim.mockResolvedValue([{ ...lease(), id: task.id, userId: task.userId, type: "image", status: "pending", executionPhase: "created" }]);
+        mocks.getImageTask.mockResolvedValue(task);
+        mocks.createImageTaskUpstreamStep.mockResolvedValue({ state: "failed", status: "rate_limited", error: "上游限流", retryReason: "submission_rate_limited" });
+        mocks.prepareImageTaskAutomaticRetry.mockResolvedValue(retry);
+
+        const result = await runGenerationTaskRecoveryBatch({ origin: "http://internal", workerId: "worker-one" });
+
+        expect(mocks.prepareImageTaskAutomaticRetry).toHaveBeenCalledWith(task, "上游限流");
+        expect(mocks.release).toHaveBeenCalledWith("image", task.id, "worker-one", expect.objectContaining({ executionPhase: "created", channelId: "channel-two", lastUpstreamStatus: "automatic_retry_after_rate_limit" }), { resetUpstreamIdentity: true });
+        expect(mocks.markImageTaskFailed).not.toHaveBeenCalled();
+        expect(result).toMatchObject({ pending: 1, failed: 0 });
+    });
+
     it("recovers an image upstream identity already saved in the task payload", async () => {
         const task = {
             id: "image-one",

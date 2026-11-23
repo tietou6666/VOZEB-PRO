@@ -418,7 +418,8 @@ function VozebProCanvasPage() {
                             onStop={confirmStopGeneration}
                             onGenerate={(nodeId) => {
                                 const target = nodesRef.current.find((item) => item.id === nodeId);
-                                void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", target?.metadata?.composerContent ?? target?.metadata?.prompt ?? "");
+                                const composerContent = target?.metadata?.composerContent;
+                                void handleGenerateNode(nodeId, target?.metadata?.generationMode || "image", composerContent ?? target?.metadata?.prompt ?? "", composerContent);
                             }}
                         />
                     )}

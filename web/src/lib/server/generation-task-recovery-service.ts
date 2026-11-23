@@ -468,7 +468,7 @@ async function processImageLease(lease: GenerationTaskLease, workerId: string, o
         const step = task.upstream?.id ? await queryImageTaskUpstreamStep(task, origin, cookie, cookie ? "" : task.userId) : await createImageTaskUpstreamStep(task, origin, publicOrigin, cookie, cookie ? "" : task.userId);
         const now = Date.now();
         if (step.state === "failed") {
-            if (step.retryReason === "upstream_failed") {
+            if (step.retryReason) {
                 const retry = await prepareImageTaskAutomaticRetry(task, step.error);
                 if (retry) {
                     await releaseGenerationTaskLease(
@@ -481,7 +481,7 @@ async function processImageLease(lease: GenerationTaskLease, workerId: string, o
                             provider: retry.config.advancedConfig?.protocol || retry.config.apiFormat,
                             nextPollAt: now,
                             lastPollAt: now,
-                            lastUpstreamStatus: "automatic_retry_after_upstream_failure",
+                            lastUpstreamStatus: step.retryReason === "submission_rate_limited" ? "automatic_retry_after_rate_limit" : "automatic_retry_after_upstream_failure",
                         },
                         { resetUpstreamIdentity: true },
                     );

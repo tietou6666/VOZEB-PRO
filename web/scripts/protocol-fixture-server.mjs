@@ -178,6 +178,7 @@ async function handleFixtureRequest({ request, response, url, body, tasks, reque
     }
     if (request.method === "POST" && ["/images/generations", "/images/edits"].includes(path)) {
         const model = requestedModel(body, request.headers["content-type"] || "");
+        if (model === "e2e-image-fallback" && shouldFailRequest(request, model)) return sendJson(response, 429, { error: { message: "fixture image rate limit" } });
         if (options.failImage || shouldFailRequest(request, model)) return sendJson(response, options.failImage || model.includes("-fail") ? 400 : 503, { error: { message: "fixture image failure" } });
         const image = requestsTransparentBackground(body, request.headers["content-type"] || "") ? Buffer.from(TRANSPARENT_PNG_BASE64, "base64") : await fixtureImage(options);
         const images = requestsLayeredOutput(body) ? await layeredFixtureImages(body, request.headers["content-type"] || "", options) : [image];
