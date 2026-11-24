@@ -6,6 +6,7 @@ export type CapabilityConstraintInput = {
     durationSeconds?: number;
     batchSize?: number;
     aspectRatio?: string;
+    quality?: string;
     resolution?: string;
 };
 
@@ -18,6 +19,8 @@ export function assertCapabilityConstraints(profile: LogicalModelCapabilityProfi
     if (input.durationSeconds && profile.durationSeconds?.length && !profile.durationSeconds.includes(input.durationSeconds)) throw new Error(`当前模型不支持 ${input.durationSeconds} 秒时长`);
     const aspectRatio = normalizedAspectRatio(input.aspectRatio);
     if (aspectRatio && aspectRatio !== "auto" && profile.aspectRatios?.length && !profile.aspectRatios.some((item) => normalizedAspectRatio(item) === aspectRatio)) throw new Error(`当前模型不支持 ${input.aspectRatio} 比例`);
+    const quality = input.quality?.trim().toLowerCase() || "";
+    if (input.capability === "image" && quality && quality !== "auto" && profile.imageQualities?.length && !profile.imageQualities.some((item) => item.trim().toLowerCase() === quality)) throw new Error(`当前模型不支持 ${input.quality} 画质`);
     const resolution = normalizedResolution(input.resolution);
     if (resolution && resolution !== "auto" && profile.resolutions?.length && !profile.resolutions.some((item) => normalizedResolution(item) === resolution)) throw new Error(`当前模型不支持 ${input.resolution} 分辨率`);
 }

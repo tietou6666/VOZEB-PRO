@@ -76,8 +76,10 @@ describe("GlobalAiOpc image task paths", () => {
     });
 
     it("normalizes ratio results to the exact upstream request while restoring custom output dimensions", () => {
-        expect(resolveResultSize("low", "1:1")).toBe("1024x1024");
-        expect(resolveResultSize("high", "16:9")).toBe(resolveRequestSize("high", "16:9"));
+        expect(resolveResultSize("1K", "1:1")).toBe(resolveRequestSize("1K", "1:1"));
+        expect(resolveResultSize("4K", "16:9")).toBe(resolveRequestSize("4K", "16:9"));
+        expect(resolveResultSize("high", "1:1")).toBeUndefined();
+        expect(resolveRequestSize("auto", "1:1")).toBeUndefined();
         expect(resolveResultSize(undefined, "400x600")).toBe("400x600");
         expect(resolveResultSize(undefined, "auto")).toBeUndefined();
     });

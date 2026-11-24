@@ -636,7 +636,7 @@ test("creative conversation keeps successful media rounds copy-only", async ({ p
     await expect(round.getByTestId("creative-user-avatar")).toBeVisible();
     await expect(round.getByLabel("本轮创作参数")).toContainText("e2e-image-model");
     await expect(round.getByLabel("本轮创作参数")).toContainText("1:1");
-    await expect(round.getByLabel("本轮创作参数")).toContainText("高画质");
+    await expect(round.getByLabel("本轮创作参数")).toContainText("高强度");
 
     const result = round.getByTestId("creative-media-result");
     const primaryResult = result.getByTestId("creative-primary-result");
@@ -773,7 +773,7 @@ test("creative conversation keeps successful media rounds copy-only", async ({ p
 
     await round.getByRole("button", { name: "查看本轮创作详细信息" }).click();
     const details = page.getByText("本轮创作详情", { exact: true }).locator("..", { hasText: "e2e-image-model" });
-    await expect(details).toContainText("高画质");
+    await expect(details).toContainText("高强度");
     await page.keyboard.press("Escape");
 
     await page.evaluate(() => localStorage.setItem("vozeb-pro:theme_store", JSON.stringify({ state: { theme: "dark" }, version: 0 })));

@@ -50,7 +50,7 @@ export async function runCustomImageTask(task: ImageTask, origin: string, public
         size,
         ratio: imageRequestAspectRatio(config.size || "auto"),
         aspect_ratio: imageRequestAspectRatio(config.size || "auto"),
-        resolution: advanced.protocol === "yumeng" ? resolveYumengImageResolution(config.model, config.quality) : config.quality || "auto",
+        resolution: advanced.protocol === "yumeng" ? resolveYumengImageResolution(config.model, config.resolution) : config.resolution && config.resolution.toLowerCase() !== "auto" ? config.resolution : undefined,
         width,
         height,
         quality: config.quality || "auto",
@@ -86,8 +86,8 @@ export async function runCustomImageTask(task: ImageTask, origin: string, public
     });
 }
 
-export function resolveDeclarativeImageSize(config: Pick<ImageTask["config"], "quality" | "size" | "advancedConfig">) {
-    const size = resolveRequestSize(config.quality, config.size || "auto") || config.size || "";
+export function resolveDeclarativeImageSize(config: Pick<ImageTask["config"], "resolution" | "size" | "advancedConfig">) {
+    const size = resolveRequestSize(config.resolution, config.size || "auto") || config.size || "";
     return !size || size.toLowerCase() === "auto" ? "" : size;
 }
 

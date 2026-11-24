@@ -76,6 +76,7 @@ export default function CreatePage() {
     const [composerExpanded, setComposerExpanded] = useState(true);
     const publicSettings = usePublicSessionStore((state) => state.payload?.settings);
     const siteTitle = resolveSiteTitle(publicSettings?.site?.title);
+    const defaultImageResolution = publicSettings?.generationDefaults?.imageResolution || "1K";
     const agent = useCreateAgent();
     const openAgentConversation = agent.openConversation;
     const newAgentConversation = agent.newConversation;
@@ -89,6 +90,10 @@ export default function CreatePage() {
         promptRevisionRef.current += 1;
         setPrompt(value);
     }, []);
+
+    useEffect(() => {
+        setGenerationPreferences((current) => (current.image?.resolution ? current : { ...current, image: { ...current.image, resolution: defaultImageResolution } }));
+    }, [defaultImageResolution]);
 
     useEffect(() => {
         let active = true;

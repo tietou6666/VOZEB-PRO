@@ -7,6 +7,7 @@ import { createProtocolFixtureServer } from "../../../../scripts/protocol-fixtur
 import { runGeminiImageTask } from "./image-task-gemini";
 import { buildJsonImageEditBodies, buildResponsesImageBodies, runOpenAiImageTask, runOpenAiJsonImageEditTask, runOpenAiResponsesImageTask } from "./image-task-openai";
 import { runCustomImageTask } from "./image-task-custom";
+import { resolveRequestSize } from "./image-task-size";
 import type { ImageTask } from "@/lib/server/image-task-store";
 import { emptyAdvancedConfig } from "@/lib/channel-protocol-registry";
 
@@ -52,6 +53,25 @@ describe("OpenAI image provider over a live compatible fixture", () => {
             expect(fixture.requests[0]).toMatchObject({ method: "POST", path: "/v1/images/generations" });
             expect(fixture.requests[0]?.headers.authorization).toBe("Bearer fixture-key");
             expect(JSON.parse(fixture.requests[0]?.body.toString("utf8") || "{}")).toMatchObject({ model: "mock-image", response_format: "url" });
+        } finally {
+            await new Promise<void>((resolve, reject) => fixture.server.close((error?: Error) => (error ? reject(error) : resolve())));
+        }
+    });
+
+    it("sends image quality and resolution as independent OpenAI fields", async () => {
+        const fixture = createProtocolFixtureServer();
+        await new Promise<void>((resolve) => fixture.server.listen(0, "127.0.0.1", resolve));
+        const address = fixture.server.address();
+        if (!address || typeof address === "string") throw new Error("Protocol fixture did not bind a TCP port");
+        const origin = `http://127.0.0.1:${address.port}`;
+        const task = liveImageTask(origin, { config: { baseUrl: origin, apiKey: "fixture-key", apiFormat: "openai", model: "mock-image", channelId: "fixture-image", quality: "high", resolution: "4K", size: "16:9" } });
+
+        try {
+            await expect(runOpenAiImageTask(task, "", "", "", true)).resolves.toMatchObject({ dataUrl: expect.any(String) });
+            const body = JSON.parse(fixture.requests[0]?.body.toString("utf8") || "{}");
+            expect(body).toMatchObject({ quality: "high", size: expect.any(String) });
+            expect(body).not.toHaveProperty("resolution");
+            expect(body.size).toBe(resolveRequestSize("4K", "16:9"));
         } finally {
             await new Promise<void>((resolve, reject) => fixture.server.close((error?: Error) => (error ? reject(error) : resolve())));
         }
@@ -469,6 +489,35 @@ describe("OpenAI image provider over a live compatible fixture", () => {
         }
     });
 
+    it("maps independent image quality and resolution to documented Gemini 3 generation settings", async () => {
+        const fixture = createProtocolFixtureServer();
+        await new Promise<void>((resolve) => fixture.server.listen(0, "127.0.0.1", resolve));
+        const address = fixture.server.address();
+        if (!address || typeof address === "string") throw new Error("Protocol fixture did not bind a TCP port");
+        const origin = `http://127.0.0.1:${address.port}`;
+        const task = liveImageTask(origin, {
+            config: {
+                baseUrl: origin,
+                apiKey: "fixture-key",
+                apiFormat: "gemini",
+                model: "gemini-3.1-flash-image-preview",
+                channelId: "fixture-gemini",
+                quality: "medium",
+                resolution: "2K",
+                size: "16:9",
+                advancedConfig: { ...emptyAdvancedConfig(), protocol: "compatible", createPath: "/models/:model:generateContent" },
+            },
+        });
+
+        try {
+            await expect(runGeminiImageTask(task, origin, "")).resolves.toMatchObject({ dataUrl: expect.any(String) });
+            const body = JSON.parse(fixture.requests[0]?.body.toString("utf8") || "{}");
+            expect(body.generationConfig).toMatchObject({ thinkingConfig: { thinkingLevel: "MEDIUM" }, imageConfig: { imageSize: "2K", aspectRatio: "16:9" } });
+        } finally {
+            await new Promise<void>((resolve, reject) => fixture.server.close((error?: Error) => (error ? reject(error) : resolve())));
+        }
+    });
+
     it.each([
         ["Stable Diffusion", "stable-diffusion", "/sdapi/v1/txt2img", '{"prompt":"{{prompt}}","width":"{{width}}","height":"{{height}}","override_settings":{"sd_model_checkpoint":"{{model}}"}}', "images[0]"],
         ["custom", "custom", "/custom/images", '{"deployment":"{{model}}","input":"{{prompt}}","dimensions":"{{size}}"}', "data.image_url"],
@@ -505,9 +554,9 @@ describe("OpenAI image provider over a live compatible fixture", () => {
     });
 
     it.each([
-        ["custom", "high"],
-        ["yumeng", "4K"],
-    ] as const)("keeps image quality mapping isolated for the %s protocol", async (protocol, expectedResolution) => {
+        ["custom", "high", "2K"],
+        ["yumeng", "high", "4K"],
+    ] as const)("keeps image quality separate from resolution for the %s protocol", async (protocol, quality, resolution) => {
         const fixture = createProtocolFixtureServer();
         await new Promise<void>((resolve) => fixture.server.listen(0, "127.0.0.1", resolve));
         const address = fixture.server.address();
@@ -521,14 +570,18 @@ describe("OpenAI image provider over a live compatible fixture", () => {
                 apiFormat: "openai",
                 model: protocol === "yumeng" ? "seedream-5.0" : "fixture-image-model",
                 channelId: `fixture-${protocol}`,
-                quality: "high",
-                advancedConfig: { ...emptyAdvancedConfig(), protocol, createPath: "/custom/images", requestTemplate: '{"model":"{{model}}","prompt":"{{prompt}}","resolution":"{{resolution}}"}', resultField: "data.image_url" },
+                quality,
+                resolution,
+                advancedConfig: { ...emptyAdvancedConfig(), protocol, createPath: "/custom/images", requestTemplate: '{"model":"{{model}}","prompt":"{{prompt}}","quality":"{{quality}}","resolution":"{{resolution}}"}', resultField: "data.image_url" },
             },
         });
 
         try {
             await expect(runCustomImageTask(task, "", "", "", true)).resolves.toMatchObject({ dataUrl: expect.any(String) });
-            expect(JSON.parse(fixture.requests[0]?.body.toString("utf8") || "{}")).toMatchObject({ resolution: expectedResolution });
+            const body = JSON.parse(fixture.requests[0]?.body.toString("utf8") || "{}");
+            expect(body).toMatchObject({ resolution });
+            if (protocol === "custom") expect(body).toMatchObject({ quality });
+            else expect(body).not.toHaveProperty("quality");
         } finally {
             await new Promise<void>((resolve, reject) => fixture.server.close((error?: Error) => (error ? reject(error) : resolve())));
         }
@@ -591,7 +644,8 @@ describe("OpenAI image provider over a live compatible fixture", () => {
                 model: "midjourney-proxy",
                 channelId: "fixture-custom-relay",
                 size: "9:16",
-                quality: "2K",
+                quality: "high",
+                resolution: "2K",
                 advancedConfig: {
                     ...emptyAdvancedConfig(),
                     protocol: "custom",
@@ -609,11 +663,11 @@ describe("OpenAI image provider over a live compatible fixture", () => {
             expect(body).toMatchObject({
                 ratio: "9:16",
                 aspect_ratio: "9:16",
-                size: "1024x1824",
+                size: "1536x2720",
                 resolution: "2K",
-                quality: "2K",
-                width: 1024,
-                height: 1824,
+                quality: "high",
+                width: 1536,
+                height: 2720,
                 n: 1,
                 count: 1,
                 num_images: 1,

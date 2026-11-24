@@ -105,6 +105,7 @@ export type LogicalModelCapabilityProfile = {
     supportsReferenceAudio?: boolean;
     maxReferenceImages?: number;
     aspectRatios?: string[];
+    imageQualities?: string[];
     resolutions?: string[];
     durationSeconds?: number[];
     minDurationSeconds?: number;
@@ -180,6 +181,7 @@ export type GenerationDefaultSettings = {
     canvasImageCount: number;
     imageSize: string;
     imageQuality: string;
+    imageResolution: string;
     imageCount: number;
     videoQuality: string;
     videoSeconds: number;

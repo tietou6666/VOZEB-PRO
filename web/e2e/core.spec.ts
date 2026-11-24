@@ -148,6 +148,38 @@ test("admin data lifecycle settings persist without password re-verification", a
     }
 });
 
+test("admin default image resolution persists through save, refresh and API reads", async ({ page, request }) => {
+    const beforeResponse = await request.get("/api/admin/settings");
+    expect(beforeResponse.ok(), await beforeResponse.text()).toBe(true);
+    const before = ((await beforeResponse.json()) as { settings: { generationDefaults: { imageResolution: string } } }).settings.generationDefaults;
+    const nextResolution = before.imageResolution === "2K" ? "1K" : "2K";
+
+    try {
+        await page.goto("/admin?section=settings", { waitUntil: "domcontentloaded" });
+        await expect(page.locator(".admin-dashboard-shell")).toHaveAttribute("data-hydrated", "true");
+        const resolutionControl = page.locator("label").filter({ hasText: "默认图片分辨率" }).locator(".ant-select");
+        await expect(resolutionControl).toContainText(before.imageResolution);
+        const resolutionInput = resolutionControl.getByRole("combobox");
+        await resolutionInput.click();
+        await resolutionInput.press(nextResolution === "2K" ? "ArrowDown" : "ArrowUp");
+        await resolutionInput.press("Enter");
+        await page.getByRole("button", { name: "保存系统设置" }).click();
+        await expect(page.getByText("系统设置已保存", { exact: true })).toBeVisible();
+        await expect(resolutionControl).toContainText(nextResolution);
+
+        const persistedResponse = await request.get("/api/admin/settings");
+        expect(persistedResponse.ok(), await persistedResponse.text()).toBe(true);
+        expect(((await persistedResponse.json()) as { settings: { generationDefaults: { imageResolution: string } } }).settings.generationDefaults.imageResolution).toBe(nextResolution);
+
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await expect(page.locator(".admin-dashboard-shell")).toHaveAttribute("data-hydrated", "true");
+        await expect(page.locator("label").filter({ hasText: "默认图片分辨率" }).locator(".ant-select")).toContainText(nextResolution);
+    } finally {
+        const restored = await request.patch("/api/admin/settings", { data: { generationDefaults: before } });
+        expect(restored.ok(), await restored.text()).toBe(true);
+    }
+});
+
 test("text tasks return content, fail over automatically, and surface terminal failures", async ({ request }) => {
     const fallback = await request.post("/api/text-tasks", { data: { config: { model: "e2e-text-fallback" }, messages: [{ role: "user", content: "protocol fallback" }] } });
     expect(fallback.ok(), await fallback.text()).toBe(true);

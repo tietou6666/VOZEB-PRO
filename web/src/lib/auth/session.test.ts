@@ -82,6 +82,7 @@ describe("serializePublicSettings", () => {
             x: { enabled: true, label: "X", url: "https://x.com/vozeb_pro" },
             instagram: { enabled: true, label: "Instagram", url: "https://instagram.com/vozeb.pro" },
         };
+        settings.generationDefaults.imageResolution = "4K";
 
         const result = serializePublicSettings(settings);
         const serialized = JSON.stringify(result);
@@ -99,6 +100,7 @@ describe("serializePublicSettings", () => {
             },
         ]);
         expect(result.logicalModels[0]?.bindings[0]).toEqual({ id: "binding-one", channelId: "channel-one", upstreamModel: "vendor-image", enabled: true, priority: 1 });
+        expect(result.generationDefaults.imageResolution).toBe("4K");
         expect(serialized).not.toContain("provider-secret");
         expect(serialized).not.toContain("internal-provider.example");
         expect(serialized).not.toContain("smtp.internal");

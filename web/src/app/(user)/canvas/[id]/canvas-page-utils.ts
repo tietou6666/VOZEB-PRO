@@ -146,6 +146,7 @@ export function replaceCanvasNodeMediaMetadata(current: CanvasNodeMetadata | und
         model: undefined,
         size: undefined,
         quality: undefined,
+        resolution: undefined,
         count: undefined,
         seconds: undefined,
         vquality: undefined,
@@ -189,6 +190,7 @@ export function buildImageGenerationMetadata(type: CanvasImageGenerationType, co
         model: config.model,
         size: config.size,
         quality: config.quality,
+        resolution: config.resolution,
         count,
         references: references.map(referenceUrl).filter((url): url is string => Boolean(url)),
     };
@@ -420,6 +422,7 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         ...config,
         model,
         quality: node?.metadata?.quality || config.quality || defaultConfig.quality,
+        resolution: node?.metadata?.resolution || config.resolution || defaultConfig.resolution,
         size: node?.type === CanvasNodeType.Panorama ? PANORAMA_IMAGE_SIZE : node?.metadata?.size || config.size || defaultConfig.size,
         videoSeconds: node?.metadata?.seconds || config.videoSeconds || defaultConfig.videoSeconds,
         vquality: node?.metadata?.vquality || config.vquality || defaultConfig.vquality,

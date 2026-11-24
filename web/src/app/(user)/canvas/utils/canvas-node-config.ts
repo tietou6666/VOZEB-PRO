@@ -7,6 +7,7 @@ export function buildCanvasNodeConfig(globalConfig: AiConfig, node: CanvasNodeDa
         ...globalConfig,
         model,
         quality: node.metadata?.quality || globalConfig.quality || defaultConfig.quality,
+        resolution: node.metadata?.resolution || globalConfig.resolution || defaultConfig.resolution,
         size: node.metadata?.size || globalConfig.size || defaultConfig.size,
         videoSeconds: node.metadata?.seconds || globalConfig.videoSeconds || defaultConfig.videoSeconds,
         vquality: node.metadata?.vquality || globalConfig.vquality || defaultConfig.vquality,

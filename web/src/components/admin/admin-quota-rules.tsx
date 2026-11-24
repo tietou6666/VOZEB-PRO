@@ -12,10 +12,10 @@ import { LabeledControl } from "@/components/admin/admin-settings-controls";
 import { toNumberOrOne, toNumberOrZero, uniqueList } from "@/components/admin/admin-values";
 
 const imageQualityMultiplierOptions = [
-    { key: "auto", label: "自动" },
-    { key: "low", label: "低清" },
-    { key: "medium", label: "中等" },
-    { key: "high", label: "高清" },
+    { key: "auto", label: "智能" },
+    { key: "low", label: "低强度" },
+    { key: "medium", label: "中强度" },
+    { key: "high", label: "高强度" },
 ];
 const videoQualityMultiplierOptions = [
     { key: "480", label: "480p" },
@@ -161,7 +161,7 @@ export function QuotaRuleTable({
                 <div className="text-sm font-semibold text-stone-950 dark:text-stone-100">生成参数倍率</div>
                 <div className="mt-1 text-xs leading-5 text-stone-500 dark:text-stone-400">最终扣费 = 模型消耗 × 图片张数/视频任务 × 对应参数倍率。未命中的自定义参数按 1 倍计算。</div>
                 <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(220px,0.8fr)_minmax(220px,0.8fr)_minmax(360px,1.4fr)]">
-                    <MultiplierGroup title="图片清晰度" values={imageQualityMultiplierOptions} group="imageQuality" settings={settings.generationPointMultipliers.imageQuality} onChange={onGenerationPointMultiplierChange} />
+                    <MultiplierGroup title="图片画质/思考强度" values={imageQualityMultiplierOptions} group="imageQuality" settings={settings.generationPointMultipliers.imageQuality} onChange={onGenerationPointMultiplierChange} />
                     <MultiplierGroup title="视频清晰度" values={videoQualityMultiplierOptions} group="videoQuality" settings={settings.generationPointMultipliers.videoQuality} onChange={onGenerationPointMultiplierChange} />
                     <VideoSecondsMultiplierGroup settings={settings.generationPointMultipliers.videoSeconds} onChange={onGenerationPointMultiplierChange} onDelete={onGenerationPointMultiplierDelete} />
                 </div>

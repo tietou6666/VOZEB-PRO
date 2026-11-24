@@ -28,8 +28,6 @@ import {
     type ImageTaskRunResult,
     type GeminiPart,
     type GeminiPayload,
-    QUALITY_BASE,
-    QUALITY_ALIASES,
     DEFAULT_IMAGE_SHORT_SIDE,
     IMAGE_SIZE_STEP,
     IMAGE_MIN_PIXELS,
@@ -113,6 +111,7 @@ import {
     parseChargedImageResponse,
     refundChargedImageResponse,
     imageUnits,
+    imageRequestAspectRatio,
     isRemoteMediaUrl,
     normalizeQuality,
     resolveRequestSize,
@@ -137,7 +136,14 @@ export async function runGeminiImageTask(task: ImageTask, origin: string, cookie
         headers: geminiHeaders(config, cookie, imagePointsIdempotencyKey(task)),
         body: JSON.stringify({
             contents: [{ role: "user", parts }],
-            generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+            generationConfig: {
+                responseModalities: ["TEXT", "IMAGE"],
+                ...(geminiThinkingLevel(config.model, config.quality) ? { thinkingConfig: { thinkingLevel: geminiThinkingLevel(config.model, config.quality) } } : {}),
+                imageConfig: {
+                    ...(config.resolution && config.resolution !== "auto" ? { imageSize: config.resolution } : {}),
+                    ...(imageRequestAspectRatio(config.size || "auto") ? { aspectRatio: imageRequestAspectRatio(config.size || "auto") } : {}),
+                },
+            },
         }),
         cache: "no-store",
     });
@@ -152,4 +158,11 @@ export async function runGeminiImageTask(task: ImageTask, origin: string, cookie
             throw new GenerationSubmissionUncertainError(error instanceof Error ? error.message : "Gemini 没有返回图片，创建结果待确认");
         }
     });
+}
+
+function geminiThinkingLevel(model: string, quality?: string) {
+    const modelName = model.trim().replace(/^models\//i, "");
+    const level = quality?.trim().toUpperCase();
+    if (!/^gemini-3(?:[.-]|$)/i.test(modelName) || !level || !["LOW", "MEDIUM", "HIGH"].includes(level)) return undefined;
+    return level;
 }

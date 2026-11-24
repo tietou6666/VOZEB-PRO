@@ -19,6 +19,7 @@ export type ImageTaskConfig = {
     logicalModel?: string;
     capabilityProfile?: LogicalModelCapabilityProfile;
     quality?: string;
+    resolution?: string;
     size?: string;
     outputBackground?: "opaque" | "transparent";
     outputMode?: "layers";

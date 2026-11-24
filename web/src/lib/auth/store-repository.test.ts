@@ -38,6 +38,7 @@ describe("PostgreSQL auth read paths", () => {
 
         expect(settings.generationDefaults).toMatchObject({
             imageCount: 2,
+            imageResolution: "1K",
         });
     });
 

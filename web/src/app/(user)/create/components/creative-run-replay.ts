@@ -11,10 +11,11 @@ export function creativeRunReplayPreferences(run?: CreativeAgentRun): CreativeGe
             .filter((count) => Number.isInteger(count) && count > 0);
     const imageCounts = counts("image");
     const videoCounts = counts("video");
+    const imageResolution = run.tasks.find((task) => task.type === "image")?.resolution;
     if (!imageCounts.length && !videoCounts.length) return preferences;
     return {
         ...preferences,
-        ...(imageCounts.length ? { image: { ...preferences?.image, count: Math.max(...imageCounts) } } : {}),
+        ...(imageCounts.length ? { image: { ...preferences?.image, ...(imageResolution ? { resolution: imageResolution } : {}), count: Math.max(...imageCounts) } } : {}),
         ...(videoCounts.length ? { video: { ...preferences?.video, count: Math.max(...videoCounts) } } : {}),
     };
 }

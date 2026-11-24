@@ -104,6 +104,7 @@ export type AiConfig = {
     textModels: string[];
     audioModels: string[];
     quality: string;
+    resolution: string;
     size: string;
     count: string;
     canvasImageCount: string;
@@ -136,6 +137,7 @@ export type PublicSystemSettings = {
         canvasImageCount?: number;
         imageSize?: string;
         imageQuality?: string;
+        imageResolution?: string;
         imageCount?: number;
         videoQuality?: string;
         videoSeconds?: number;
@@ -184,6 +186,7 @@ export const defaultConfig: AiConfig = {
     textModels: [],
     audioModels: [],
     quality: "auto",
+    resolution: "1K",
     size: "1:1",
     count: "1",
     canvasImageCount: "1",
@@ -289,6 +292,7 @@ export function applyPublicSystemSettings(config: AiConfig, settings?: PublicSys
         canvasImageCount: normalizeCanvasImageCount(settings?.generationDefaults?.canvasImageCount),
         size: settings?.generationDefaults?.imageSize || defaultConfig.size,
         quality: settings?.generationDefaults?.imageQuality || defaultConfig.quality,
+        resolution: settings?.generationDefaults?.imageResolution || defaultConfig.resolution,
         count: String(settings?.generationDefaults?.imageCount || defaultConfig.count),
         videoSeconds: String(settings?.generationDefaults?.videoSeconds || defaultConfig.videoSeconds),
         vquality: settings?.generationDefaults?.videoQuality || defaultConfig.vquality,

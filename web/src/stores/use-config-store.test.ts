@@ -106,12 +106,13 @@ describe("applyPublicSystemSettings", () => {
         const config = applyPublicSystemSettings(defaultConfig, {
             ...audioSettings,
             generationConcurrency: { agent: 11, image: 12, video: 6, audio: 13, text: 21, render: 7 },
-            generationDefaults: { canvasImageCount: 11, imageCount: 12, imageSize: "auto", imageQuality: "auto", videoQuality: "720", videoSeconds: 5, audioVoice: "alloy", audioFormat: "mp3" },
+            generationDefaults: { canvasImageCount: 11, imageCount: 12, imageSize: "auto", imageQuality: "auto", imageResolution: "4K", videoQuality: "720", videoSeconds: 5, audioVoice: "alloy", audioFormat: "mp3" },
         });
 
         expect(config.generationConcurrency).toEqual({ agent: 11, image: 12, video: 6, audio: 13, text: 21, render: 7 });
         expect(config.canvasImageCount).toBe("11");
         expect(config.count).toBe("12");
+        expect(config.resolution).toBe("4K");
     });
 });
 

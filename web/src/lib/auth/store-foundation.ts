@@ -164,6 +164,7 @@ export const DEFAULT_SETTINGS: AuthSettings = {
         canvasImageCount: 1,
         imageSize: "1:1",
         imageQuality: "auto",
+        imageResolution: "1K",
         imageCount: 1,
         videoQuality: "720",
         videoSeconds: 5,

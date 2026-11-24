@@ -133,6 +133,7 @@ export const agentPlanTool = {
                         count: { type: "integer", minimum: 1 },
                         ratio: { type: "string" },
                         quality: { type: "string" },
+                        resolution: { type: "string" },
                         seconds: { type: "number", minimum: 1 },
                         voice: { type: "string" },
                         format: { type: "string" },
@@ -183,9 +184,13 @@ export function normalizeTasks(
         const optimizedPrompt = item.prompt.trim();
         const preferredSize = item.type === "image" ? generationPreferences?.image?.size : item.type === "video" ? generationPreferences?.video?.size : undefined;
         const preferredQuality = item.type === "image" ? generationPreferences?.image?.quality : item.type === "video" ? generationPreferences?.video?.quality : undefined;
+        const preferredResolution = item.type === "image" ? generationPreferences?.image?.resolution : undefined;
         const smartQuality = isCreativeAutoValue(preferredQuality) || isCreativeAutoValue(item.quality);
+        const smartResolution = isCreativeAutoValue(preferredResolution) || isCreativeAutoValue(item.resolution);
         const concretePreferredQuality = preferredQuality && !isCreativeAutoValue(preferredQuality) ? preferredQuality : undefined;
         const concretePlannedQuality = item.quality && !isCreativeAutoValue(item.quality) ? item.quality.trim() : undefined;
+        const concretePreferredResolution = preferredResolution && !isCreativeAutoValue(preferredResolution) ? preferredResolution : undefined;
+        const concretePlannedResolution = item.resolution && !isCreativeAutoValue(item.resolution) ? item.resolution.trim() : undefined;
         const targetNodeId = surface === "canvas" ? resolveCanvasTaskTargetNodeId(item.targetNodeId, item.type, selectedNodeIds, nodes) : undefined;
         const target = targetNodeId ? nodes.get(targetNodeId) : undefined;
         const canvasReferences = selectedCanvasReferences.filter((reference) => canvasReferenceSupportsTask(reference.type, item.type));
@@ -246,6 +251,7 @@ export function normalizeTasks(
                 concretePreferredQuality ||
                 concretePlannedQuality ||
                 (!smartQuality ? textDefault(item.type === "video" ? defaults.vquality : defaults.quality) || (item.type === "video" ? globalDefaults.videoQuality : item.type === "image" ? globalDefaults.imageQuality : undefined) : "auto"),
+            resolution: item.type === "image" ? concretePreferredResolution || concretePlannedResolution || (!smartResolution ? textDefault(defaults.resolution) || globalDefaults.imageResolution : "auto") : undefined,
             seconds: item.type === "video" && generationPreferences?.video?.seconds ? generationPreferences.video.seconds : resolveAgentVideoSeconds(item.type, item.seconds, defaults.videoSeconds, globalDefaults.videoSeconds),
             voice: item.type === "audio" ? generationPreferences?.audio?.voice || item.voice?.trim() || textDefault(defaults.voice) || globalDefaults.audioVoice : item.voice?.trim() || textDefault(defaults.voice),
             format: item.type === "audio" ? generationPreferences?.audio?.format || item.format?.trim() || textDefault(defaults.format) || globalDefaults.audioFormat : item.format?.trim() || textDefault(defaults.format),
@@ -340,7 +346,14 @@ function directModelAllocations(models: DirectAgentModelOption[], preferences?: 
 function assertAgentTaskCapabilities(settings: Awaited<ReturnType<typeof getAuthSettings>>, task: AgentRunTask) {
     if (!task.model) return;
     const candidates = resolveLogicalModelCandidates(settings, task.type, task.model);
-    const input = { capability: task.type, batchSize: task.count, durationSeconds: task.seconds, aspectRatio: task.ratio, resolution: task.quality } as const;
+    const input = {
+        capability: task.type,
+        batchSize: task.count,
+        durationSeconds: task.seconds,
+        aspectRatio: task.ratio,
+        quality: task.type === "image" ? task.quality : undefined,
+        resolution: task.type === "image" ? task.resolution : task.type === "video" ? task.quality : undefined,
+    } as const;
     if (candidates.some((candidate) => allowsCapability(candidate.capabilityProfile, input))) return;
     assertCapabilityConstraints(candidates[0]?.capabilityProfile, input);
     throw new Error("当前模型没有支持所选生成参数的可用渠道");
@@ -722,7 +735,7 @@ export async function dispatchTask(task: AgentRunTask, origin: string, cookie: s
         apiKey: "",
         apiFormat: channel.apiFormat || "openai",
         model,
-        ...(task.type === "image" ? { ...(task.quality ? { quality: task.quality } : {}), ...(task.ratio ? { size: task.ratio } : {}) } : {}),
+        ...(task.type === "image" ? { ...(task.quality ? { quality: task.quality } : {}), ...(task.resolution ? { resolution: task.resolution } : {}), ...(task.ratio ? { size: task.ratio } : {}) } : {}),
         ...(task.type === "video"
             ? {
                   ...(task.ratio ? { size: task.ratio } : {}),

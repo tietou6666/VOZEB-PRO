@@ -39,8 +39,7 @@ import {
     type ImageTaskRunResult,
     type GeminiPart,
     type GeminiPayload,
-    QUALITY_BASE,
-    QUALITY_ALIASES,
+    IMAGE_RESOLUTION_BASE,
     IMAGE_OUTPUT_FORMAT,
     TASK_HEARTBEAT_MS,
     IMAGE_TASK_POLL_INTERVAL_MS,
@@ -832,7 +831,7 @@ export async function refundChargedImageResponse(task: ImageTask, headers: Heade
 }
 
 export function imageUnits(quality: string | undefined, multipliers: Record<string, number>) {
-    const key = QUALITY_ALIASES[String(quality || "").toLowerCase()] || String(quality || "auto").toLowerCase();
+    const key = String(quality || "auto").toLowerCase();
     return multipliers[key] || 1;
 }
 
@@ -842,6 +841,5 @@ export function isRemoteMediaUrl(value: string) {
 
 export function normalizeQuality(quality: string) {
     const value = quality.trim().toLowerCase();
-    const normalized = QUALITY_ALIASES[value] || value;
-    return QUALITY_BASE[normalized] ? normalized : undefined;
+    return ["low", "medium", "high"].includes(value) && !IMAGE_RESOLUTION_BASE[value] ? value : undefined;
 }

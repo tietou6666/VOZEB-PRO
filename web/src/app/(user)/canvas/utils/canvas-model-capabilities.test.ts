@@ -36,12 +36,12 @@ describe("canvas model capabilities", () => {
     });
 
     it("reconciles image and video parameters with the selected model", () => {
-        expect(canvasModelConfigPatch(config, "image-model", "image")).toEqual({ model: "image-model", size: "9:16", quality: "auto", count: 2 });
+        expect(canvasModelConfigPatch(config, "image-model", "image")).toEqual({ model: "image-model", size: "9:16", quality: "auto", resolution: "2K", count: 2 });
         expect(canvasModelConfigPatch(config, "video-model", "video")).toEqual({ model: "video-model", size: "16:9", vquality: "1080", seconds: "8" });
     });
 
     it("does not turn intelligent Canvas parameters into the first fixed model option", () => {
-        expect(canvasModelConfigPatch({ ...config, size: "auto", quality: "auto", vquality: "auto" }, "image-model", "image")).toEqual({ model: "image-model", size: "auto", quality: "auto", count: 2 });
+        expect(canvasModelConfigPatch({ ...config, size: "auto", quality: "auto", resolution: "auto", vquality: "auto" }, "image-model", "image")).toEqual({ model: "image-model", size: "auto", quality: "auto", resolution: "auto", count: 2 });
         expect(canvasModelConfigPatch({ ...config, size: "auto", quality: "auto", vquality: "auto" }, "video-model", "video")).toEqual({ model: "video-model", size: "auto", vquality: "auto", seconds: "8" });
     });
 });

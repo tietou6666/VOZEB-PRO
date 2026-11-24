@@ -178,7 +178,7 @@ describe("image task route", () => {
         mocks.withGenerationConcurrencyLimit.mockImplementation(async (_userId, _type, _staleMs, _limit, handler) => handler());
         mocks.getAuthSettings.mockResolvedValue({
             generationConcurrency: { image: 1 },
-            generationDefaults: { imageSize: "1:1", imageQuality: "low" },
+            generationDefaults: { imageSize: "1:1", imageQuality: "low", imageResolution: "1K" },
             systemChannels: [{ id: "image-channel", name: "图片", enabled: true, baseUrl: "https://image.example.com/v1", apiKey: "secret", apiFormat: "openai", models: ["upstream-image"] }],
             logicalModels: [
                 {
@@ -208,7 +208,7 @@ describe("image task route", () => {
         mocks.withGenerationConcurrencyLimit.mockImplementation(async (_userId, _type, _staleMs, _limit, handler) => handler());
         mocks.getAuthSettings.mockResolvedValue({
             generationConcurrency: { image: 1 },
-            generationDefaults: { imageSize: "1:1", imageQuality: "low" },
+            generationDefaults: { imageSize: "1:1", imageQuality: "low", imageResolution: "1K" },
             systemChannels: [{ id: "image-channel", name: "图片", enabled: true, baseUrl: "https://image.example.com/v1", apiKey: "secret", apiFormat: "openai", models: ["upstream-image"] }],
             logicalModels: [
                 {
@@ -227,19 +227,19 @@ describe("image task route", () => {
             new Request("http://localhost/api/image-tasks", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ config: { model: "image", size: "auto", quality: "auto" }, prompt: "智能构图" }),
+                body: JSON.stringify({ config: { model: "image", size: "auto", quality: "auto", resolution: "auto" }, prompt: "智能构图" }),
             }),
         );
 
         expect(response.status).toBe(200);
-        expect(mocks.createImageTask).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ size: "auto", quality: "auto" }) }));
+        expect(mocks.createImageTask).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ size: "auto", quality: "auto", resolution: "auto" }) }));
     });
 
     it("rejects a layer task before upstream submission when it has no unique edit source", async () => {
         mocks.withGenerationConcurrencyLimit.mockImplementation(async (_userId, _type, _staleMs, _limit, handler) => handler());
         mocks.getAuthSettings.mockResolvedValue({
             generationConcurrency: { image: 1 },
-            generationDefaults: { imageSize: "auto", imageQuality: "auto" },
+            generationDefaults: { imageSize: "auto", imageQuality: "auto", imageResolution: "1K" },
             systemChannels: [{ id: "image-channel", name: "图片", enabled: true, baseUrl: "https://image.example.com/v1", apiKey: "secret", apiFormat: "openai", models: ["upstream-image"] }],
             logicalModels: [
                 {
@@ -274,7 +274,7 @@ function imageRequest(body: unknown) {
 function imageSettings() {
     return {
         generationConcurrency: { image: 1 },
-        generationDefaults: { imageSize: "auto", imageQuality: "auto" },
+        generationDefaults: { imageSize: "auto", imageQuality: "auto", imageResolution: "1K" },
         systemChannels: [{ id: "image-channel", name: "图片", enabled: true, baseUrl: "https://image.example.com/v1", apiKey: "secret", apiFormat: "openai", models: ["upstream-image"] }],
         logicalModels: [
             {

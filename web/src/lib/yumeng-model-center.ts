@@ -190,14 +190,9 @@ export function normalizeYumengModelCenterBaseUrl(value: string) {
     }
 }
 
-export function resolveYumengImageResolution(model: string, quality: string | undefined) {
-    const normalized = normalizeModel(model);
-    const value = quality?.trim().toLowerCase();
-    if (!value || value === "auto") return undefined;
-    if (normalized === "seedream_5.0pro") return value === "high" || value === "2k" ? "2K" : "1K";
-    if (value === "high" || value === "4k") return "4K";
-    if (value === "medium" || value === "3k") return "3K";
-    return "2K";
+export function resolveYumengImageResolution(_model: string, resolution: string | undefined) {
+    const value = resolution?.trim().toUpperCase();
+    return value && ["1K", "2K", "4K"].includes(value) ? value : undefined;
 }
 
 export function buildYumengImageRequest(input: YumengImageRequestInput) {

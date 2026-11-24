@@ -36,7 +36,7 @@ describe("creativeRunPresentation", () => {
             inputMessageId: "user-two",
             assistantMessageId: "assistant-two",
             status: "planning",
-            generationPreferences: { mode: "image", image: { size: "3:4", quality: "high" } },
+            generationPreferences: { mode: "image", image: { size: "3:4", quality: "high", resolution: "4K" } },
             assetIds: [],
             tasks: [],
         } satisfies CreativeAgentRun;
@@ -44,7 +44,8 @@ describe("creativeRunPresentation", () => {
         expect(creativeRunPresentation(run, new Map())).toEqual([
             { key: "mode", label: "类型", value: "图片生成" },
             { key: "size", label: "尺寸", value: "3:4" },
-            { key: "quality", label: "画质", value: "高画质" },
+            { key: "resolution", label: "分辨率", value: "4K" },
+            { key: "quality", label: "画质", value: "高强度" },
             { key: "status", label: "状态", value: "规划中" },
         ]);
     });

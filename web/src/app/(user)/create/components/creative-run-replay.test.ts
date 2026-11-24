@@ -6,7 +6,9 @@ import { creativeRunReplayPreferences } from "./creative-run-replay";
 
 describe("creativeRunReplayPreferences", () => {
     it("preserves the actual image task count for edit and regenerate", () => {
-        expect(creativeRunReplayPreferences(run({ generationPreferences: { image: { size: "1:1", quality: "high" } }, tasks: [task("image", 4)] }))).toEqual({ image: { size: "1:1", quality: "high", count: 4 } });
+        expect(creativeRunReplayPreferences(run({ generationPreferences: { image: { size: "1:1", quality: "high", resolution: "2K" } }, tasks: [{ ...task("image", 4), resolution: "4K" }] }))).toEqual({
+            image: { size: "1:1", quality: "high", resolution: "4K", count: 4 },
+        });
     });
 
     it("preserves the actual video batch count for edit and regenerate", () => {

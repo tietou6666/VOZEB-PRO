@@ -17,8 +17,11 @@ export function creativeRunPresentation(run: CreativeAgentRun | undefined, model
     const size = firstText(tasks.map((task) => task.ratio)) || (preferences && "size" in preferences ? preferences.size : undefined);
     if (size) items.push({ key: "size", label: mode === "video" ? "比例" : "尺寸", value: size });
 
+    const resolution = mode === "image" ? firstText(tasks.map((task) => task.resolution)) || (preferences && "resolution" in preferences ? preferences.resolution : undefined) : undefined;
+    if (resolution) items.push({ key: "resolution", label: "分辨率", value: resolution });
+
     const quality = firstText(tasks.map((task) => task.quality)) || (preferences && "quality" in preferences ? preferences.quality : undefined);
-    if (quality) items.push({ key: "quality", label: mode === "video" ? "清晰度" : "画质", value: qualityLabel(quality) });
+    if (quality) items.push({ key: "quality", label: mode === "video" ? "清晰度" : "画质", value: qualityLabel(quality, mode) });
 
     const seconds = firstNumber(tasks.map((task) => task.seconds)) || (preferences && "seconds" in preferences ? preferences.seconds : undefined);
     if (seconds) items.push({ key: "seconds", label: "时长", value: `${seconds}秒` });
@@ -56,8 +59,8 @@ export function mediaModeLabel(mode: CreativeGenerationMode) {
     return mode === "image" ? "图片生成" : mode === "video" ? "视频生成" : "音频生成";
 }
 
-function qualityLabel(value: string) {
-    const labels: Record<string, string> = { auto: "智能", high: "高画质", medium: "标准", low: "快速" };
+function qualityLabel(value: string, mode: CreativeGenerationMode | undefined) {
+    const labels: Record<string, string> = mode === "image" ? { auto: "智能", high: "高强度", medium: "中强度", low: "低强度" } : { auto: "智能" };
     return labels[value.toLowerCase()] || value;
 }
 

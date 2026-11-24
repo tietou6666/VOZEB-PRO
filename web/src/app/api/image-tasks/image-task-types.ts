@@ -77,17 +77,10 @@ export type GeminiPayload = {
     promptFeedback?: { blockReason?: string };
 };
 
-export const QUALITY_BASE: Record<string, number> = {
-    low: 1024,
-    medium: 2048,
-    high: 2880,
-    standard: 1024,
-    hd: 2048,
-};
-export const QUALITY_ALIASES: Record<string, string> = {
-    "1k": "low",
-    "2k": "medium",
-    "4k": "high",
+export const IMAGE_RESOLUTION_BASE: Record<string, number> = {
+    "1k": 1024,
+    "2k": 2048,
+    "4k": 2880,
 };
 export const DEFAULT_IMAGE_SHORT_SIDE = 1024;
 export const IMAGE_SIZE_STEP = 16;

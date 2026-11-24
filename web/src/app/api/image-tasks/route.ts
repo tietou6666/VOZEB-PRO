@@ -37,8 +37,6 @@ import {
     type ImageTaskRunResult,
     type GeminiPart,
     type GeminiPayload,
-    QUALITY_BASE,
-    QUALITY_ALIASES,
     DEFAULT_IMAGE_SHORT_SIDE,
     IMAGE_SIZE_STEP,
     IMAGE_MIN_PIXELS,
@@ -173,7 +171,8 @@ export async function POST(request: Request) {
                     capability: "image",
                     referenceCount: references.length,
                     aspectRatio: config.size,
-                    resolution: config.quality,
+                    quality: config.quality,
+                    resolution: config.resolution,
                 });
                 return true;
             } catch {

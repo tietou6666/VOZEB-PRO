@@ -154,19 +154,19 @@ describe("directAgentPlan", () => {
         ).toBe("1824x1024");
     });
 
-    it("统一 Agent 将用户选择的图片尺寸和画质写入真实任务", () => {
+    it("统一 Agent 将用户选择的图片比例、画质和分辨率分别写入真实任务", () => {
         const plan = {
             intent: "generation",
             objective: "生成主视觉",
             reply: "开始生成",
             decisions: [],
             foundation: { complexity: "simple", brief: { objective: "生成主视觉" }, direction: { summary: "横版构图" } },
-            deliverables: [{ id: "hero", title: "主视觉", type: "image", model: "image-pro", prompt: "产品海报", count: 1, ratio: "1:1", quality: "low", dependencies: [] }],
+            deliverables: [{ id: "hero", title: "主视觉", type: "image", model: "image-pro", prompt: "产品海报", count: 1, ratio: "1:1", quality: "low", resolution: "2K", dependencies: [] }],
         };
 
-        const [task] = normalizeTasks(plan as never, [], generationSettings() as never, undefined, "产品海报", "chat", [], undefined, { mode: "image", image: { size: "16:9", quality: "high", count: 4 } });
+        const [task] = normalizeTasks(plan as never, [], generationSettings() as never, undefined, "产品海报", "chat", [], undefined, { mode: "image", image: { size: "16:9", quality: "high", resolution: "4K", count: 4 } });
 
-        expect(task).toMatchObject({ type: "image", ratio: "16:9", quality: "high", count: 4 });
+        expect(task).toMatchObject({ type: "image", ratio: "16:9", quality: "high", resolution: "4K", count: 4 });
     });
 
     it("统一 Agent 的智能参数使用规划结果且不回退全局 1:1", () => {
@@ -176,12 +176,12 @@ describe("directAgentPlan", () => {
             reply: "开始生成",
             decisions: [],
             foundation: { complexity: "simple", brief: { objective: "生成竖版海报" }, direction: { summary: "竖版构图" } },
-            deliverables: [{ id: "poster", title: "海报", type: "image", model: "image-pro", prompt: "竖版产品海报", count: 1, ratio: "9:16", quality: "2K", dependencies: [] }],
+            deliverables: [{ id: "poster", title: "海报", type: "image", model: "image-pro", prompt: "竖版产品海报", count: 1, ratio: "9:16", quality: "high", resolution: "2K", dependencies: [] }],
         };
 
-        const [task] = normalizeTasks(plan as never, [], generationSettings() as never, undefined, "生成竖版海报", "chat", [], undefined, { mode: "image", image: { size: "auto", quality: "auto" } });
+        const [task] = normalizeTasks(plan as never, [], generationSettings() as never, undefined, "生成竖版海报", "chat", [], undefined, { mode: "image", image: { size: "auto", quality: "auto", resolution: "auto" } });
 
-        expect(task).toMatchObject({ ratio: "9:16", quality: "2K" });
+        expect(task).toMatchObject({ ratio: "9:16", quality: "high", resolution: "2K" });
     });
 
     it("在落库前拒绝所有候选渠道都不支持的 Agent 参数", () => {
@@ -194,7 +194,7 @@ describe("directAgentPlan", () => {
             deliverables: [{ id: "hero", title: "主视觉", type: "image", model: "image-pro", prompt: "产品海报", count: 1, ratio: "1:1", quality: "low", dependencies: [] }],
         };
         const settings = generationSettings();
-        settings.logicalModels[0].bindings[0] = { ...settings.logicalModels[0].bindings[0], capabilityProfile: { aspectRatios: ["9:16"], resolutions: ["2K"] } } as never;
+        settings.logicalModels[0].bindings[0] = { ...settings.logicalModels[0].bindings[0], capabilityProfile: { aspectRatios: ["9:16"], imageQualities: ["high"], resolutions: ["2K"] } } as never;
 
         expect(() => normalizeTasks(plan as never, [], settings as never, undefined, "产品海报", "chat", [])).toThrow("不支持 1:1 比例");
     });
@@ -410,6 +410,6 @@ function generationSettings() {
             { id: "video-pro", name: "专业视频模型", capability: "video", enabled: true, bindings: [{ id: "binding-video", channelId: "video-channel", upstreamModel: "vendor/video-pro", enabled: true, priority: 1 }] },
             { id: "audio-pro", name: "专业音频模型", capability: "audio", enabled: true, bindings: [{ id: "binding-audio", channelId: "audio-channel", upstreamModel: "vendor/audio-pro", enabled: true, priority: 1 }] },
         ],
-        generationDefaults: { canvasImageCount: 1, imageSize: "1:1", imageQuality: "high", videoSeconds: 5, videoQuality: "720p", audioVoice: "alloy", audioFormat: "mp3" },
+        generationDefaults: { canvasImageCount: 1, imageSize: "1:1", imageQuality: "high", imageResolution: "1K", videoSeconds: 5, videoQuality: "720p", audioVoice: "alloy", audioFormat: "mp3" },
     };
 }

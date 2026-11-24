@@ -55,7 +55,7 @@ export function deletePreparedImageTaskResults(results: StoredImageTaskMediaResu
 }
 
 async function persistPreparedResults(task: ImageTask, results: ImageTaskMediaResult[], requireAll: boolean) {
-    const targetSize = task.config.outputMode === "layers" ? undefined : resolveResultSize(task.config.quality, task.config.size || "auto");
+    const targetSize = task.config.outputMode === "layers" ? undefined : resolveResultSize(task.config.resolution, task.config.size || "auto");
     const settled = await Promise.allSettled(
         results.map((item, index) =>
             normalizeAssets([{ type: "image", url: item.dataUrl, remoteUrl: item.remoteUrl, targetSize }], {

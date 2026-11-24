@@ -8,6 +8,38 @@ import { E2E_PROTOCOL_ORIGIN, pollTask } from "./support";
 
 test.describe.configure({ mode: "serial" });
 
+test("canvas image node separates resolution from thinking strength", async ({ page, request }) => {
+    const project = await createCanvasProject(request, {
+        title: `Canvas 图片参数分离 ${randomUUID().slice(0, 8)}`,
+        nodes: [node("image-settings", "image", 100, 100, 260, 200, { size: "1:1", quality: "low", resolution: "1K" })],
+        connections: [],
+    });
+
+    try {
+        await page.goto(`/canvas/${project.id}`, { waitUntil: "domcontentloaded" });
+        const imageNode = page.locator('[data-node-id="image-settings"]');
+        await imageNode.click({ position: { x: 40, y: 40 } });
+        const settingsTrigger = page.getByRole("button", { name: /图片设置：/ });
+        await expect(settingsTrigger).toContainText("1K");
+        await expect(settingsTrigger).toContainText("低强度");
+        await settingsTrigger.click();
+
+        const panel = page.locator("[data-creative-generation-preferences]:visible");
+        await expect(panel).toBeVisible();
+        await panel.getByRole("button", { name: "选择图片分辨率 4K" }).click();
+        await panel.getByRole("tab", { name: "输出" }).click();
+        await panel.getByRole("button", { name: "选择图片画质思考强度 高强度" }).click();
+        await expect(settingsTrigger).toContainText("4K");
+        await expect(settingsTrigger).toContainText("高强度");
+        await expectCanvasSaved(page);
+
+        const savedProject = await readCanvasProject(request, `/api/canvas/projects/${project.id}`);
+        expect(savedProject.nodes.find((item) => item.id === "image-settings")?.metadata).toMatchObject({ size: "1:1", quality: "high", resolution: "4K" });
+    } finally {
+        await deleteCanvasProject(request, project.id);
+    }
+});
+
 test("canvas keeps editing, selection, linking and persistence fluid", async ({ page, request }) => {
     const project = await createCanvasProject(request, {
         title: `Canvas 交互回归 ${randomUUID().slice(0, 8)}`,

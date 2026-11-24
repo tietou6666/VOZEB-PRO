@@ -132,6 +132,7 @@ export function serializePublicSettings(settings: AuthSettings) {
             canvasImageCount: settings.generationDefaults.canvasImageCount,
             imageSize: settings.generationDefaults.imageSize,
             imageQuality: settings.generationDefaults.imageQuality,
+            imageResolution: settings.generationDefaults.imageResolution,
             imageCount: settings.generationDefaults.imageCount,
             videoQuality: settings.generationDefaults.videoQuality,
             videoSeconds: settings.generationDefaults.videoSeconds,
@@ -179,6 +180,7 @@ function publicCapabilityProfile(profile: AuthSettings["logicalModels"][number][
     if (!profile) return undefined;
     const result = {
         aspectRatios: profile.aspectRatios?.slice(),
+        imageQualities: profile.imageQualities?.slice(),
         resolutions: profile.resolutions?.slice(),
         durationSeconds: profile.durationSeconds?.slice(),
         minDurationSeconds: profile.minDurationSeconds,

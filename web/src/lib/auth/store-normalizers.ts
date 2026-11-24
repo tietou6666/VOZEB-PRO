@@ -345,6 +345,7 @@ export function normalizeGenerationDefaults(settings: Partial<GenerationDefaultS
         canvasImageCount: normalizePositiveSafeInteger(settings?.canvasImageCount, DEFAULT_SETTINGS.generationDefaults.canvasImageCount),
         imageSize: allowedText(settings?.imageSize, ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"], DEFAULT_SETTINGS.generationDefaults.imageSize),
         imageQuality: allowedText(settings?.imageQuality, ["auto", "low", "medium", "high"], DEFAULT_SETTINGS.generationDefaults.imageQuality),
+        imageResolution: allowedText(settings?.imageResolution, ["1K", "2K", "4K"], DEFAULT_SETTINGS.generationDefaults.imageResolution),
         imageCount: normalizePositiveSafeInteger(settings?.imageCount, DEFAULT_SETTINGS.generationDefaults.imageCount),
         videoQuality: normalizeText(settings?.videoQuality, DEFAULT_SETTINGS.generationDefaults.videoQuality, 40),
         videoSeconds: normalizeDefaultVideoSeconds(settings?.videoSeconds),

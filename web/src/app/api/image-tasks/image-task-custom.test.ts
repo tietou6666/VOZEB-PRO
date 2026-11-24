@@ -14,12 +14,12 @@ import { resolveDeclarativeImageSize, runCustomImageTask } from "./image-task-cu
 
 describe("declarative image request size", () => {
     it("does not turn Stable Diffusion intelligent requests into a square size", () => {
-        expect(resolveDeclarativeImageSize({ quality: "auto", size: "auto", advancedConfig: { ...emptyAdvancedConfig(), protocol: "stable-diffusion" } })).toBe("");
+        expect(resolveDeclarativeImageSize({ resolution: "auto", size: "auto", advancedConfig: { ...emptyAdvancedConfig(), protocol: "stable-diffusion" } })).toBe("");
     });
 
     it("preserves explicit dimensions and does not invent custom protocol defaults", () => {
-        expect(resolveDeclarativeImageSize({ quality: "high", size: "1536x1024", advancedConfig: { ...emptyAdvancedConfig(), protocol: "stable-diffusion" } })).toBe("1536x1024");
-        expect(resolveDeclarativeImageSize({ quality: "auto", size: "auto", advancedConfig: { ...emptyAdvancedConfig(), protocol: "custom" } })).toBe("");
+        expect(resolveDeclarativeImageSize({ resolution: "4K", size: "1536x1024", advancedConfig: { ...emptyAdvancedConfig(), protocol: "stable-diffusion" } })).toBe("1536x1024");
+        expect(resolveDeclarativeImageSize({ resolution: "auto", size: "auto", advancedConfig: { ...emptyAdvancedConfig(), protocol: "custom" } })).toBe("");
     });
 
     it("keeps the system proxy as the polling base when the proxy exposes the upstream URL", async () => {

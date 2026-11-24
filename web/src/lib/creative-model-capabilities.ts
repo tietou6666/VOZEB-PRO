@@ -2,7 +2,7 @@ import type { LogicalModelCapabilityProfile } from "@/lib/auth/store-types";
 import { isCreativeAutoValue, type CreativeGenerationPreferences } from "@/lib/creative-runtime-contract";
 
 export type CreativeMediaCapability = "image" | "video" | "audio";
-export type CreativeModelCapabilityProfile = Pick<LogicalModelCapabilityProfile, "aspectRatios" | "resolutions" | "durationSeconds" | "minDurationSeconds" | "maxDurationSeconds" | "maxBatchSize">;
+export type CreativeModelCapabilityProfile = Pick<LogicalModelCapabilityProfile, "aspectRatios" | "imageQualities" | "resolutions" | "durationSeconds" | "minDurationSeconds" | "maxDurationSeconds" | "maxBatchSize">;
 export type CreativeModelCapabilityOption = {
     id: string;
     name: string;
@@ -20,6 +20,7 @@ export function creativeModelProfileForLogicalModel(model: LogicalModelLike | un
     if (!profiles.length) return undefined;
     return compactProfile({
         aspectRatios: unionTextLists(profiles.map((profile) => profile.aspectRatios)),
+        imageQualities: unionTextLists(profiles.map((profile) => profile.imageQualities)),
         resolutions: unionTextLists(profiles.map((profile) => profile.resolutions)),
         durationSeconds: unionNumberLists(profiles.map((profile) => profile.durationSeconds)),
         minDurationSeconds: minimum(profiles.map((profile) => profile.minDurationSeconds)),
@@ -34,6 +35,7 @@ export function creativeSelectedModelProfile(models: readonly CreativeModelCapab
     if (!profiles.length) return undefined;
     return compactProfile({
         aspectRatios: intersectTextLists(profiles.map((profile) => profile.aspectRatios)),
+        imageQualities: intersectTextLists(profiles.map((profile) => profile.imageQualities)),
         resolutions: intersectTextLists(profiles.map((profile) => profile.resolutions)),
         durationSeconds: intersectNumberLists(profiles.map((profile) => profile.durationSeconds)),
         minDurationSeconds: maximum(profiles.map((profile) => profile.minDurationSeconds)),
@@ -47,7 +49,7 @@ export function reconcileCreativeGenerationPreferences(preferences: CreativeGene
     const imageModels = models.filter((model) => model.capability === "image");
     const imageProfile = creativeSelectedModelProfile(models, "image");
     if (imageModels.length) {
-        const image = reconcileMediaPreferences(preferences.image || {}, imageProfile || {}, imageModels.length);
+        const image = reconcileMediaPreferences(preferences.image || {}, imageProfile || {}, imageModels.length, imageProfile?.imageQualities, imageProfile?.resolutions);
         if (image !== preferences.image) next = { ...next, image };
     }
     const videoModels = models.filter((model) => model.capability === "video");
@@ -59,12 +61,19 @@ export function reconcileCreativeGenerationPreferences(preferences: CreativeGene
     return next;
 }
 
-function reconcileMediaPreferences<T extends { size?: string; quality?: string; count?: number }>(value: T, profile: CreativeModelCapabilityProfile, minimumCount: number): T {
+function reconcileMediaPreferences<T extends { size?: string; quality?: string; resolution?: string; count?: number }>(
+    value: T,
+    profile: CreativeModelCapabilityProfile,
+    minimumCount: number,
+    supportedQualities?: string[],
+    supportedResolutions?: string[],
+): T {
     let next = value;
     const size = reconcileSizeValue(value.size, profile.aspectRatios);
-    const quality = reconcileTextValue(value.quality, profile.resolutions);
+    const quality = reconcileTextValue(value.quality, supportedQualities);
+    const resolution = reconcileTextValue(value.resolution, supportedResolutions);
     const count = Math.max(minimumCount, Math.min(value.count || 1, profile.maxBatchSize || Number.POSITIVE_INFINITY));
-    if (size !== value.size || quality !== value.quality || count !== value.count) next = { ...value, size, quality, count };
+    if (size !== value.size || quality !== value.quality || resolution !== value.resolution || count !== value.count) next = { ...value, size, quality, resolution, count };
     return next;
 }
 
@@ -80,7 +89,7 @@ function reconcileSizeValue(value: string | undefined, supported: string[] | und
 }
 
 function reconcileVideoPreferences<T extends { size?: string; quality?: string; count?: number; seconds?: number }>(value: T, profile: CreativeModelCapabilityProfile, minimumCount: number): T {
-    let next = reconcileMediaPreferences(value, profile, minimumCount);
+    let next = reconcileMediaPreferences(value, profile, minimumCount, profile.resolutions);
     const seconds = reconcileSeconds(value.seconds, profile);
     if (seconds !== value.seconds) next = { ...next, seconds };
     return next;

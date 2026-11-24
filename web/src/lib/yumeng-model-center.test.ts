@@ -12,8 +12,9 @@ describe("Yumeng model center contracts", () => {
     });
 
     it("builds the two documented image payloads without leaking unsupported fields", () => {
-        expect(resolveYumengImageResolution("seedream_5.0Pro", "high")).toBe("2K");
-        expect(resolveYumengImageResolution("seedream-5.0", "high")).toBe("4K");
+        expect(resolveYumengImageResolution("seedream_5.0Pro", "2K")).toBe("2K");
+        expect(resolveYumengImageResolution("seedream-5.0", "4K")).toBe("4K");
+        expect(resolveYumengImageResolution("seedream-5.0", "high")).toBeUndefined();
         expect(resolveYumengImageResolution("seedream-5.0", "auto")).toBeUndefined();
         expect(buildYumengImageRequest({ model: "seedream-5.0", prompt: "智能构图", images: [] })).toEqual({ model: "seedream-5.0", prompt: "智能构图", watermark: false });
         expect(

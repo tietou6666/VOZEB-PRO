@@ -94,18 +94,21 @@ export function GenerationDefaultsPanel({ settings, onChange }: { settings: Auth
                         onChange={(value) => onChange("imageSize", value)}
                     />
                 </LabeledControl>
-                <LabeledControl label="默认图片质量">
+                <LabeledControl label="默认图片画质/思考强度">
                     <Select
                         className="w-full"
                         value={settings.generationDefaults.imageQuality}
                         options={[
-                            { value: "auto", label: "自动" },
-                            { value: "low", label: "低清" },
-                            { value: "medium", label: "中等" },
-                            { value: "high", label: "高清" },
+                            { value: "auto", label: "智能" },
+                            { value: "low", label: "低强度" },
+                            { value: "medium", label: "中强度" },
+                            { value: "high", label: "高强度" },
                         ]}
                         onChange={(value) => onChange("imageQuality", value)}
                     />
+                </LabeledControl>
+                <LabeledControl label="默认图片分辨率">
+                    <Select className="w-full" value={settings.generationDefaults.imageResolution} options={["1K", "2K", "4K"].map((value) => ({ value, label: value }))} onChange={(value) => onChange("imageResolution", value)} />
                 </LabeledControl>
                 <LabeledControl label="默认视频清晰度">
                     <AutoComplete

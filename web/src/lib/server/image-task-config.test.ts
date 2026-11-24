@@ -3,28 +3,32 @@ import { describe, expect, it } from "vitest";
 import { resolveImageGenerationCount, resolveImageTaskOptions } from "./image-task-config";
 
 describe("resolveImageTaskOptions", () => {
-    const defaults = { imageQuality: "high", imageSize: "9:16" };
+    const defaults = { imageQuality: "high", imageResolution: "2K", imageSize: "9:16" };
 
     it("uses backend defaults when image parameters are missing", () => {
-        expect(resolveImageTaskOptions({}, defaults)).toEqual({ quality: "high", size: "9:16" });
+        expect(resolveImageTaskOptions({}, defaults)).toEqual({ quality: "high", resolution: "2K", size: "9:16" });
     });
 
     it("keeps explicit image parameters", () => {
-        expect(resolveImageTaskOptions({ quality: "medium", size: "1:1" }, defaults)).toEqual({ quality: "medium", size: "1:1" });
+        expect(resolveImageTaskOptions({ quality: "medium", resolution: "4K", size: "1:1" }, defaults)).toEqual({ quality: "medium", resolution: "4K", size: "1:1" });
     });
 
     it("keeps only the explicit transparent output mode", () => {
-        expect(resolveImageTaskOptions({ outputBackground: "transparent" }, defaults)).toEqual({ quality: "high", size: "9:16", outputBackground: "transparent" });
-        expect(resolveImageTaskOptions({ outputBackground: "unknown" }, defaults)).toEqual({ quality: "high", size: "9:16" });
+        expect(resolveImageTaskOptions({ outputBackground: "transparent" }, defaults)).toEqual({ quality: "high", resolution: "2K", size: "9:16", outputBackground: "transparent" });
+        expect(resolveImageTaskOptions({ outputBackground: "unknown" }, defaults)).toEqual({ quality: "high", resolution: "2K", size: "9:16" });
     });
 
     it("keeps only the explicit layer output mode", () => {
-        expect(resolveImageTaskOptions({ outputMode: "layers" }, defaults)).toEqual({ quality: "high", size: "9:16", outputMode: "layers" });
-        expect(resolveImageTaskOptions({ outputMode: "unknown" }, defaults)).toEqual({ quality: "high", size: "9:16" });
+        expect(resolveImageTaskOptions({ outputMode: "layers" }, defaults)).toEqual({ quality: "high", resolution: "2K", size: "9:16", outputMode: "layers" });
+        expect(resolveImageTaskOptions({ outputMode: "unknown" }, defaults)).toEqual({ quality: "high", resolution: "2K", size: "9:16" });
     });
 
     it("treats blank image parameters as missing", () => {
-        expect(resolveImageTaskOptions({ quality: " ", size: "" }, defaults)).toEqual({ quality: "high", size: "9:16" });
+        expect(resolveImageTaskOptions({ quality: " ", resolution: " ", size: "" }, defaults)).toEqual({ quality: "high", resolution: "2K", size: "9:16" });
+    });
+
+    it("preserves an explicit intelligent resolution instead of applying the backend default", () => {
+        expect(resolveImageTaskOptions({ resolution: "auto" }, defaults)).toMatchObject({ resolution: "auto" });
     });
 });
 

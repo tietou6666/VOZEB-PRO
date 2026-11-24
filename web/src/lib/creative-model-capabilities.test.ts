@@ -41,11 +41,11 @@ describe("creative model capabilities", () => {
             id: "image",
             name: "图片",
             capability: "image",
-            capabilityProfile: { aspectRatios: ["9:16"], resolutions: ["2K"], maxBatchSize: 2 },
+            capabilityProfile: { aspectRatios: ["9:16"], imageQualities: ["low", "high"], resolutions: ["2K"], maxBatchSize: 2 },
         };
         expect(reconcileCreativeGenerationPreferences({ image: { size: "auto", quality: "auto", count: 4 } }, [model])).toEqual({ image: { size: "auto", quality: "auto", count: 2 } });
         expect(reconcileCreativeGenerationPreferences({ image: { count: 1 } }, [model])).toEqual({ image: { count: 1 } });
-        expect(reconcileCreativeGenerationPreferences({ image: { size: "1080x1920", quality: "2k", count: 1 } }, [model])).toEqual({ image: { size: "1080x1920", quality: "2K", count: 1 } });
+        expect(reconcileCreativeGenerationPreferences({ image: { size: "1080x1920", quality: "high", resolution: "1k", count: 1 } }, [model])).toEqual({ image: { size: "1080x1920", quality: "high", resolution: "2K", count: 1 } });
     });
 
     it("keeps every selected model represented and sums their known batch capacities", () => {

@@ -16,6 +16,7 @@ pnpm-lock.yaml
 *.webp
 *.svg
 .tmp-*
+.tmp/
 .e2e-data
 .e2e-artifacts
 playwright-report

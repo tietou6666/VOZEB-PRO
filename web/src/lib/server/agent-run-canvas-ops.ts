@@ -227,6 +227,7 @@ function outputMetadata(runId: string, task: AgentRunTask, status: "loading" | "
         prompt: task.prompt,
         size: task.ratio,
         quality: task.quality,
+        resolution: task.resolution,
         count: task.count,
         seconds: task.seconds ? String(task.seconds) : undefined,
         audioVoice: task.voice,

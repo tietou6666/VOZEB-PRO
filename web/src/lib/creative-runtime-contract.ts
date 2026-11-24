@@ -122,7 +122,7 @@ export type CreativeRunEvent = {
 export type CreativeGenerationMode = "image" | "video" | "audio";
 export type CreativeGenerationPreferences = {
     mode?: CreativeGenerationMode;
-    image?: { size?: string; quality?: string; count?: number };
+    image?: { size?: string; quality?: string; resolution?: string; count?: number };
     video?: {
         size?: string;
         quality?: string;
@@ -210,9 +210,10 @@ function normalizeImagePreferences(value: unknown) {
     const size = normalizePreferenceSize(input.size);
     const rawQuality = optionalText(input.quality, 40);
     const quality = isCreativeAutoValue(rawQuality) ? "auto" : rawQuality;
+    const resolution = optionalText(input.resolution, 40);
     const count = Number(input.count);
     const normalizedCount = Number.isSafeInteger(count) && count > 0 ? count : undefined;
-    return size || quality || normalizedCount ? { ...(size ? { size } : {}), ...(quality ? { quality } : {}), ...(normalizedCount ? { count: normalizedCount } : {}) } : undefined;
+    return size || quality || resolution || normalizedCount ? { ...(size ? { size } : {}), ...(quality ? { quality } : {}), ...(resolution ? { resolution } : {}), ...(normalizedCount ? { count: normalizedCount } : {}) } : undefined;
 }
 
 function normalizeVideoPreferences(value: unknown) {

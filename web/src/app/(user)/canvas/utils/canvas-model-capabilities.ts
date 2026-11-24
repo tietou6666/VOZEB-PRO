@@ -14,10 +14,12 @@ export function canvasModelConfigPatch(config: AiConfig, model: string, mode: Me
     const capabilityProfile = canvasModelCapabilityProfile(config, model);
     const option: CreativeModelCapabilityOption = { id: model, name: model, capability: mode, ...(capabilityProfile ? { capabilityProfile } : {}) };
     const preferences: CreativeGenerationPreferences =
-        mode === "image" ? { image: { size: config.size, quality: config.quality, count: positiveInteger(config.count, 1) } } : { video: { size: config.size, quality: config.vquality, seconds: positiveInteger(config.videoSeconds, 5) } };
+        mode === "image"
+            ? { image: { size: config.size, quality: config.quality, resolution: config.resolution, count: positiveInteger(config.count, 1) } }
+            : { video: { size: config.size, quality: config.vquality, seconds: positiveInteger(config.videoSeconds, 5) } };
     const reconciled = reconcileCreativeGenerationPreferences(preferences, [option]);
     return mode === "image"
-        ? { model, size: reconciled.image?.size, quality: reconciled.image?.quality, count: reconciled.image?.count }
+        ? { model, size: reconciled.image?.size, quality: reconciled.image?.quality, resolution: reconciled.image?.resolution, count: reconciled.image?.count }
         : { model, size: reconciled.video?.size, vquality: reconciled.video?.quality, seconds: reconciled.video?.seconds === undefined ? undefined : String(reconciled.video.seconds) };
 }
 

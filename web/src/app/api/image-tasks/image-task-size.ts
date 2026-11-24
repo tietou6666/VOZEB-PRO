@@ -1,9 +1,9 @@
 import { closestImageAspectRatio, parseImageDimensions } from "@/lib/image-size";
 import { GenerationSubmissionSafeFailure } from "@/lib/server/generation-submission-error";
 
-import { DEFAULT_IMAGE_SHORT_SIDE, IMAGE_MIN_PIXELS, IMAGE_SIZE_STEP, QUALITY_ALIASES, QUALITY_BASE } from "./image-task-types";
+import { DEFAULT_IMAGE_SHORT_SIDE, IMAGE_MIN_PIXELS, IMAGE_RESOLUTION_BASE, IMAGE_SIZE_STEP } from "./image-task-types";
 
-export function resolveRequestSize(quality: string | undefined, size: string) {
+export function resolveRequestSize(resolution: string | undefined, size: string) {
     try {
         const value = size.trim();
         if (!value || value.toLowerCase() === "auto") return undefined;
@@ -12,7 +12,11 @@ export function resolveRequestSize(quality: string | undefined, size: string) {
             validateImageDimensions(dimensions.width, dimensions.height);
             return upstreamImageSize(dimensions.width, dimensions.height);
         }
-        if (value.includes(":")) return resolveSize(quality, value);
+        if (value.includes(":")) {
+            const normalizedResolution = resolution?.trim().toLowerCase();
+            if (!normalizedResolution || normalizedResolution === "auto" || !IMAGE_RESOLUTION_BASE[normalizedResolution]) return undefined;
+            return resolveSize(normalizedResolution, value);
+        }
         throw new Error("图片尺寸格式不支持，请使用 auto、9:16 或 1024x1024");
     } catch (error) {
         if (error instanceof GenerationSubmissionSafeFailure) throw error;
@@ -20,18 +24,17 @@ export function resolveRequestSize(quality: string | undefined, size: string) {
     }
 }
 
-export function resolveResultSize(quality: string | undefined, size: string) {
+export function resolveResultSize(resolution: string | undefined, size: string) {
     const value = size.trim();
     const dimensions = parseImageDimensions(value);
     if (dimensions) {
         validateImageDimensions(dimensions.width, dimensions.height);
         return `${dimensions.width}x${dimensions.height}`;
     }
-    const qualityValue = String(quality || "")
+    const resolutionValue = String(resolution || "")
         .trim()
         .toLowerCase();
-    const normalizedQuality = QUALITY_ALIASES[qualityValue] || qualityValue;
-    return resolveRequestSize(QUALITY_BASE[normalizedQuality] ? normalizedQuality : undefined, value);
+    return IMAGE_RESOLUTION_BASE[resolutionValue] ? resolveRequestSize(resolutionValue, value) : undefined;
 }
 
 export function imageRequestAspectRatio(size: string) {
@@ -42,9 +45,9 @@ export function imageRequestAspectRatio(size: string) {
     return dimensions ? closestImageAspectRatio(dimensions.width, dimensions.height) : undefined;
 }
 
-export function resolveSize(quality: string | undefined, ratio: string): string {
+export function resolveSize(resolution: string | undefined, ratio: string): string {
     const parsedRatio = parseImageRatio(ratio);
-    const basePixels = quality ? QUALITY_BASE[quality] : undefined;
+    const basePixels = resolution ? IMAGE_RESOLUTION_BASE[resolution.trim().toLowerCase()] : undefined;
     const isLandscape = parsedRatio.width >= parsedRatio.height;
     const longRatio = isLandscape ? parsedRatio.width / parsedRatio.height : parsedRatio.height / parsedRatio.width;
     let longSide: number;

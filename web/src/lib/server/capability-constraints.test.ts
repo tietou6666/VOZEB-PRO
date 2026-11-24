@@ -4,7 +4,7 @@ import { assertCapabilityConstraints } from "./capability-constraints";
 
 describe("capability constraints", () => {
     it("rejects unsupported reference count, duration, batch and ratio", () => {
-        const profile = { maxReferenceImages: 2, maxDurationSeconds: 8, durationSeconds: [5, 8], maxBatchSize: 2, aspectRatios: ["16:9"], resolutions: ["1080P", "2K"] };
+        const profile = { maxReferenceImages: 2, maxDurationSeconds: 8, durationSeconds: [5, 8], maxBatchSize: 2, aspectRatios: ["16:9"], imageQualities: ["low", "high"], resolutions: ["1080P", "2K"] };
         expect(() => assertCapabilityConstraints(profile, { capability: "video", referenceCount: 3 })).toThrow("最多支持 2 张参考图");
         expect(() => assertCapabilityConstraints(profile, { capability: "video", durationSeconds: 9 })).toThrow("最长视频时长");
         expect(() => assertCapabilityConstraints(profile, { capability: "image", batchSize: 3 })).toThrow("批量生成");
@@ -12,6 +12,9 @@ describe("capability constraints", () => {
         expect(() => assertCapabilityConstraints(profile, { capability: "video", durationSeconds: 6 })).toThrow("不支持 6 秒时长");
         expect(() => assertCapabilityConstraints(profile, { capability: "video", resolution: "720p" })).toThrow("不支持 720p 分辨率");
         expect(() => assertCapabilityConstraints(profile, { capability: "image", aspectRatio: "1920x1080", resolution: "2k" })).not.toThrow();
+        expect(() => assertCapabilityConstraints(profile, { capability: "image", quality: "high", resolution: "1K" })).toThrow("不支持 1K 分辨率");
+        expect(() => assertCapabilityConstraints(profile, { capability: "image", quality: "medium", resolution: "2K" })).toThrow("不支持 medium 画质");
+        expect(() => assertCapabilityConstraints(profile, { capability: "image", quality: "high", resolution: "2K" })).not.toThrow();
         expect(() => assertCapabilityConstraints(profile, { capability: "image", aspectRatio: "auto", resolution: "AUTO" })).not.toThrow();
     });
 });
